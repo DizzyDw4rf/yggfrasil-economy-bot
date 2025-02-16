@@ -3,6 +3,7 @@ import os
 import asyncio
 from discord.ext import commands
 from dotenv import load_dotenv
+from paths import COGS_DIR
 
 
 load_dotenv()
@@ -18,7 +19,7 @@ class MyBot(commands.Bot):
         print(f"Logged in as: {self.user}")
     
     async def load_cogs(self) -> None:
-        for filename in os.listdir('./cogs'):
+        for filename in os.listdir(COGS_DIR):
             if filename.endswith('.py') and filename != "__init__.py":
                 await self.load_extension(f'cogs.{filename[:-3]}')
     
