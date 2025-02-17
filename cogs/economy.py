@@ -8,9 +8,14 @@ from random import randint
 from datetime import datetime
 from src.bot_status import BotStatus
 from src.utils.tools import formatted_time
+from src.utils.constants import Constants
+from src.databases import create_user_table, create_transaction_table, db_connection
 
 
-bank_file = 'main_bank.json'
+create_user_table()
+create_transaction_table()
+
+
 BotStatus.set_debug(True)
 server = BotStatus.get_server()
 
@@ -32,33 +37,34 @@ class Economy(commands.Cog):
         )
         await interaction.response.send_message(embed=inv_embed)
     
-    def get_bank_data(self) -> dict:
-        with open(bank_file) as f:
-            users = json.load(f)
-        return users
+    def get_user_data(self, user_id: int):
+        with db_connection() as conn:
+            c = conn.cursor()
+            c.execute("""SELECT * FROM Users WHERE id = ?""", (user_id,))
+            return c.fetchone()
+    
+    def create_user(self, user_id: int, username: str) -> None:
+        with db_connection() as conn:
+            c = conn.cursor()
+            c.execute("""INSERT INTO Users (id, username) VALUES (?, ?)""", (user_id, username))
+            conn.commit()
+    
+    def update_user(self, user_id: int, wallet: int, bank: int) -> None:
+        with db_connection() as conn:
+            c = conn.cursor()
+            c.execute("""UPDATE Users SET wallet = ?, SET bank = ? WHERE id = ?""", (wallet, bank, user_id))
+            conn.commit()
 
     async def open_account(self, interaction) -> discord.Embed:
-        users = self.get_bank_data()
-        user_id = str(interaction.user.id)
-        with open(bank_file, 'w') as f:
-            users[user_id] = {}
-            users[user_id]['wallet'] = 0
-            users[user_id]['bank'] = 1000
-            users[user_id]['transactions'] = {}
-            users[user_id]['transactions']['last_sand'] = {}
-            users[user_id]['transactions']['last_sand']['amount'] = 0
-            users[user_id]['transactions']['last_sand']['date'] = 0
-            users[user_id]['transactions']['last_recive'] = {}
-            users[user_id]['transactions']['last_recive']['amount'] = 0
-            users[user_id]['transactions']['last_recive']['date'] = 0
-            users[user_id]['inventory'] = {}
-            json.dump(users, f, indent=2)
+        user_id = interaction.user.id
+        username = interaction.user.display_name
+        self.create_user(user_id=user_id, username=username)
         new_acc = discord.Embed(
             title='New Bank Account',
             description=(
                 f'{interaction.user.mention}\'s fresh Bank Account.\n\n'
-                f'**Wallet 💰**: {users[user_id]['wallet']} 🍀\n\n'
-                f'**Bank 🏛**: {users[user_id]['bank']} 🍀'
+                f'{Constants.WALLET}: 500 {Constants.COIN}\n\n'
+                f'{Constants.BANK}: 500 {Constants.COIN}'
             ),
             color=discord.Color.blue()
         )
@@ -69,38 +75,43 @@ class Economy(commands.Cog):
         if str(interaction.guild) and str(interaction.guild_id) != server:
             await self.send_inv_embed(interaction)
         else:
-            users = self.get_bank_data()
-            user_id = str(interaction.user.id)
+            user_id = interaction.user.id
+            user_data = self.get_user_data(user_id=user_id)
 
             if not member: # If no member Chosen show the user balance
                 # Checking if user has an account
-                if user_id not in users:
+                if user_data is None:
                     # Create a new account
                     await self.open_account(interaction)
-                else: # Show the balance of the account
-                    exist_acc = discord.Embed(
-                        title=f'{interaction.user.display_name}\'s Balance',
-                        description=(
-                            f'**Wallet 💰**: {users[user_id]['wallet']} 🍀\n\n'
-                            f'**Bank 🏛**: {users[user_id]['bank']} 🍀'
-                        ),
-                        color=discord.Color.green()
-                    )
-                    await interaction.response.send_message(embed=exist_acc)
+                    return
+                # Show the balance of the account
+                username, wallet, bank =user_data[1], user_data[2], user_data[3]
+                exist_acc = discord.Embed(
+                    title=f'{username}\'s Balance',
+                    description=(
+                        f'{Constants.WALLET}: {wallet} {Constants.COIN}\n\n'
+                        f'{Constants.BANK}: {bank} {Constants.COIN}'
+                    ),
+                    color=discord.Color.green()
+                )
+                await interaction.response.send_message(embed=exist_acc)
             else:
-                member_id = str(member.id)
-                if member_id not in users: # If member not in user send not found message
+                member_id = member.id
+                member_data = self.get_user_data(member_id)
+                if member_data is None: # If member not in user send not found message
                     await interaction.response.send_message('This member don\'t have Balance Account', ephemeral=True)
-                else:
-                    member_embed = discord.Embed(
-                        title=f'{member.display_name}\'s Balance',
-                        description=(
-                            f'**Wallet 💰**: {users[member_id]['wallet']} 🍀\n\n'
-                            f'**Bank 🏛**: {users[member_id]['bank']} 🍀'
-                        ),
-                        color=discord.Colour.green()
-                    )
-                    await interaction.response.send_message(embed=member_embed)
+                    return
+                
+                username, wallet, bank = member_data[1], member_data[2], member_data[3]
+                member_embed = discord.Embed(
+                    title=f'{username}\'s Balance',
+                    description=(
+                        f'{Constants.WALLET}: {wallet} {Constants.COIN}\n\n'
+                        f'{Constants.BANK}: {bank} {Constants.COIN}'
+                    ),
+                    color=discord.Colour.green()
+                )
+                await interaction.response.send_message(embed=member_embed)
 
     @app_commands.describe(member='A member exists in the guild', amount='The positive number you will to give to user')
     @app_commands.command(name='add', description='Give member Currency')
@@ -111,23 +122,23 @@ class Economy(commands.Cog):
             # Checking for adminstrator permission
             if not interaction.user.guild_permissions.administrator:
                 await interaction.response.send_message('You don\'t have `Adminstrator`', ephemeral=True)
-            else:
-                member_id = str(member.id)
-                users = self.get_bank_data()
-                # Validating member has bank account
-                if member_id not in users:
-                    await interaction.response.send_message(f'{member.display_name}\'s Don\'t have bank account!', ephemeral=True)
-                else: # check if amount is valid then add it to bank
-                    amount = abs(amount)
-                    with open(bank_file, 'w') as f:
-                        users[member_id]['bank'] += amount
-                        json.dump(users, f, indent=2)
-                    added_embed = discord.Embed(
-                        title=f'{member.display_name} Has been rewareded with {amount} 🍀',
-                        description=f'His **Bank 🏛**:  {users[member_id]['bank']} 🍀',
-                        color=discord.Color.yellow()
-                    )
-                    await interaction.response.send_message(embed=added_embed)
+                return
+
+            member_id = member.id
+            member_data = self.get_user_data(member_id)
+            # Validating member has bank account
+            if member_data is None:
+                await interaction.response.send_message(f'{member.display_name}\'s Don\'t have bank account!', ephemeral=True)
+                return
+            # check if amount is valid then add it to bank
+            new_bank_balance = member_data[3] + abs(amount)
+            self.update_user(member_id, member_data[2], new_bank_balance)
+            added_embed = discord.Embed(
+                title=f'{member.display_name} Has been rewareded with {amount} {Constants.COIN}',
+                description=f'His {Constants.BANK}:  {new_bank_balance} {Constants.COIN}',
+                color=discord.Color.yellow()
+            )
+            await interaction.response.send_message(embed=added_embed)
     
     @app_commands.describe(member='A member exists in the guild', amount='The positive number you will to remove from user')
     @app_commands.command(name='remove', description='Remove currency from member')
@@ -138,57 +149,54 @@ class Economy(commands.Cog):
             # Validating adminstrator permission
             if not interaction.user.guild_permissions.administrator:
                 await interaction.response.send_message('You don\'t have `Adminstrator`', ephemeral=True)
-            else:
-                member_id = str(member.id)
-                users = self.get_bank_data()
-                # Validating member has bank account
-                if member_id not in users:
-                    await interaction.response.send_message(f'{member.display_name}\'s Don\'t have bank account!', ephemeral=True)
-                else: 
-                    amount = abs(amount)
-                    # amount < = total balance
-                    if amount <= users[member_id]['bank'] + users[member_id]['wallet']:
-                        if amount <= users[member_id]['bank']: # Remove from bank if possible
-                            with open(bank_file, 'w') as f:
-                                users[member_id]['bank'] -= amount
-                                json.dump(users, f, indent=2)
-                            rmv_embed = discord.Embed(
-                                title=f'{member.display_name} has been punished',
-                                description=(
-                                    f'His **Bank 🏛**:  {users[member_id]['bank']} 🍀'
-                                ),
-                                color=discord.Color.red()
-                            )
-                            await interaction.response.send_message(embed=rmv_embed)
-                        else: # Take all from bank and remaining from wallet
-                            with open(bank_file, 'w') as f:
-                                users[member_id]['wallet'] -= (amount - users[member_id]['bank'])
-                                users[member_id]['bank'] = 0
-                                json.dump(users, f, indent=2)
-                            rmv_embed = discord.Embed(
-                                title=f'{member.display_name} has been punished',
-                                description=(
-                                    f'His **Wallet 💰**: {users[member_id]['wallet']} 🍀\n'
-                                    f'His **Bank 🏛**:  0 🍀'
-                                ),
-                                color=discord.Color.red()
-                            )
-                            await interaction.response.send_message(embed=rmv_embed)
-                    else: # amount > total balance
-                        # Remove all in bank and wallet
-                        with open(bank_file, 'w') as f:
-                            users[member_id]['wallet'] = 0
-                            users[member_id]['bank'] = 0
-                            json.dump(users, f, indent=2)
-                        rmv_embed = discord.Embed(
-                                title=f'{member.display_name} has been punished',
-                                description=(
-                                    f'His **Wallet 💰**: 0 🍀\n'
-                                    f'His **Bank 🏛**:  0 🍀'
-                                ),
-                                color=discord.Color.red()
-                            )
-                        await interaction.response.send_message(embed=rmv_embed)
+                return
+
+            member_id = member.id
+            member_data = self.get_user_data(member_id)
+            # Validating member has bank account
+            if member_data is None:
+                await interaction.response.send_message(f'{member.display_name}\'s Don\'t have bank account!', ephemeral=True)
+                return
+            amount = abs(amount)
+            # amount < = total balance
+            wallet, bank = member_data[2], member_data[3]
+            total_balance = wallet + bank
+            if amount <= total_balance:
+                if amount <= bank: # Remove from bank if possible
+                    new_bank_balance = bank - amount
+                    self.update_user(member_id, wallet, new_bank_balance)
+                    rmv_embed = discord.Embed(
+                        title=f'{member.display_name} has been punished',
+                        description=(
+                            f'His {Constants.BANK}:  {new_bank_balance} {Constants.COIN}'
+                        ),
+                        color=discord.Color.red()
+                    )
+                    await interaction.response.send_message(embed=rmv_embed)
+                else: # Take all from bank and remaining from wallet
+                    new_wallet_balance = wallet - (amount - bank)
+                    self.update_user(member_id, new_wallet_balance, 0)
+                    rmv_embed = discord.Embed(
+                        title=f'{member.display_name} has been punished',
+                        description=(
+                            f'His {Constants.WALLET}: {new_wallet_balance} {Constants.COIN}\n'
+                            f'His {Constants.BANK}:  0 {Constants.COIN}'
+                        ),
+                        color=discord.Color.red()
+                    )
+                    await interaction.response.send_message(embed=rmv_embed)
+            else: # amount > total balance
+                # Remove all in bank and wallet
+                self.update_user(member_id, 0, 0)
+                rmv_embed = discord.Embed(
+                        title=f'{member.display_name} has been punished',
+                        description=(
+                            f'His {Constants.WALLET}: 0 {Constants.COIN}\n'
+                            f'His {Constants.BANK}:  0 {Constants.COIN}'
+                        ),
+                        color=discord.Color.red()
+                    )
+                await interaction.response.send_message(embed=rmv_embed)
 
     @app_commands.command(name='daily', description='Reward currency to member once every day')
     @app_commands.checks.cooldown(1, 86400, key=lambda i: i.user.id)
@@ -196,25 +204,26 @@ class Economy(commands.Cog):
         if str(interaction.guild) and str(interaction.guild_id) != server:
             await self.send_inv_embed(interaction)
         else:
-            users = self.get_bank_data()
-            user_id = str(interaction.user.id)
-            if user_id not in users:
+            user_id = interaction.user.id
+            user_data = self.get_user_data(user_id)
+            if user_data is None:
                 await interaction.response.send_message('Use `/balance` to open account first.', ephemeral=True)
-            else:
-                rand_amount = randint(500, 1001)
-                with open(bank_file, 'w') as f:
-                    users[user_id]['bank'] += rand_amount
-                    json.dump(users, f, indent=2)
-                daily_embed = discord.Embed(
-                    title=f'{interaction.user.display_name} Got a reward.',
-                    description=(
-                        f'Your **Bank 🏛** increased with {rand_amount} 🍀\n\n'
-                        f'**Wallet 💰**: {users[user_id]['wallet']} 🍀\n\n'
-                        f'**Bank 🏛**:  {users[user_id]['bank']} 🍀'
-                    ),
-                    color=discord.Color.yellow()
-                )
-                await interaction.response.send_message(embed=daily_embed)
+                return
+            
+            rand_amount = randint(500, 1001)
+            wallet , bank = user_data[2], user_data[3]
+            new_bank_balance = bank + rand_amount
+            self.update_user(user_id, wallet, new_bank_balance)
+            daily_embed = discord.Embed(
+                title=f'{interaction.user.display_name} Got a reward.',
+                description=(
+                    f'Your {Constants.BANK} increased with {rand_amount} {Constants.COIN}\n\n'
+                    f'{Constants.WALLET}: {wallet} {Constants.COIN}\n\n'
+                    f'{Constants.BANK}:  {new_bank_balance} {Constants.COIN}'
+                ),
+                color=discord.Color.yellow()
+            )
+            await interaction.response.send_message(embed=daily_embed)
 
     # Error handling for daily cooldown
     @daily.error
@@ -236,173 +245,195 @@ class Economy(commands.Cog):
         if str(interaction.guild) and str(interaction.guild_id) != server:
             await self.send_inv_embed(interaction)
         else:
-            users = self.get_bank_data()
-            user_id = str(interaction.user.id)
-            member_id = str(member.id)
-            if user_id not in users:
-                await interaction.response.send_message('Use `/balance` to create bank account\nYou can\'t send credits without an account', ephemeral=True)
-            elif member_id not in users:
-                await interaction.response.send_message('The member you want to send him credits don\'t have a bank account inform him to use `/balance` to create one!', ephemeral=True)
-            else:
-                amount = abs(amount)
-                send_btn = Button(
-                    style= ButtonStyle.blurple,
-                    label='Send',
-                    emoji='🚀'
-                )
-                cancel_send_btn = Button(
-                    style= ButtonStyle.danger,
-                    label='Cancel',
-                    emoji='✖'
-                )
-                
-                transaction_view = View()
-                transaction_view.add_item(send_btn)
-                transaction_view.add_item(cancel_send_btn)
-                verify_embed = discord.Embed(
-                    title='**Transaction verification**',
-                    description=(
-                        f'Are you sure you want to send {amount} 🍀 to {member.display_name}?'
-                    ),
-                    color=discord.Color.blurple()
-                )
-                await interaction.response.send_message(embed=verify_embed, view=transaction_view)
+            user_id = interaction.user.id
+            member_id = member.id
+            user_data = self.get_user_data(user_id)
+            member_data = self.get_user_data(member_id)
+            if user_data is None or member_data is None:
+                await interaction.response.send_message('User Not Found in bank account.\nMake sure to use"/balance" to create account', ephemeral=True)
+                return
 
-            async def send_btn_callback(interaction: discord.Interaction) -> None:
-                if interaction.user.id == int(user_id):
-                    if amount > users[user_id]['bank']:
-                        not_enough = discord.Embed(
-                            title=f'You tried to send {amount} 🍀',
-                            description=f'Your **Bank 🏛**: {users[user_id]['bank']}',
-                            color=discord.Color.dark_red()
-                        )
-                        await interaction.response.send_message(embed=not_enough)
-                    else:
-                        with open(bank_file, 'w') as f:
-                            users[user_id]['bank'] -= amount
-                            users[member_id]['bank'] += amount
-                            users[user_id]['transactions']['last_sand']['amount'] = amount
-                            users[user_id]['transactions']['last_sand']['date'] = Economy.date
-                            users[member_id]['transactions']['last_recive']['amount'] = amount
-                            users[member_id]['transactions']['last_recive']['date'] = Economy.date
-                            json.dump(users, f, indent=2)
-                        trans_done = discord.Embed(
-                            title='**Transaction Completed 🚀**',
-                            description=(
-                                f'{interaction.user.display_name} sent {member.display_name} {amount} 🍀'
-                            ),
-                            color=discord.Color.dark_teal()
-                        )
-                        await interaction.response.edit_message(embed=trans_done, view=None)
-                else:
-                    await interaction.response.send_message('You can\'t make a decison', ephemeral=True)
+            amount = abs(amount)
+            send_btn = Button(
+                style= ButtonStyle.blurple,
+                label='Send',
+                emoji='🚀'
+            )
+            cancel_send_btn = Button(
+                style= ButtonStyle.danger,
+                label='Cancel',
+                emoji='✖'
+            )
             
-            async def cancel_btn_callback(interaction: discord.Interaction) -> None:
-                if interaction.user.id == int(user_id):
-                    cancel_embed = discord.Embed(
-                        title='Transaction Canceld ❌',
-                        description=f'{interaction.user.display_name} Canceld the transaction to {member.display_name}',
+            transaction_view = View()
+            transaction_view.add_item(send_btn)
+            transaction_view.add_item(cancel_send_btn)
+            verify_embed = discord.Embed(
+                title='**Transaction verification**',
+                description=(
+                    f'Are you sure you want to send {amount} {Constants.COIN} to {member.display_name}?'
+                ),
+                color=discord.Color.blurple()
+            )
+            await interaction.response.send_message(embed=verify_embed, view=transaction_view)
+
+        async def send_btn_callback(interaction: discord.Interaction) -> None:
+            if interaction.user.id == int(user_id):
+                if amount > user_data[3]:
+                    not_enough = discord.Embed(
+                        title=f'You tried to send {amount} {Constants.COIN}',
+                        description=f'Your {Constants.BANK}: {user_data[3]}',
                         color=discord.Color.dark_red()
                     )
-                    await interaction.response.edit_message(embed=cancel_embed, view=None)
+                    await interaction.response.send_message(embed=not_enough)
                 else:
-                    await interaction.response.send_message('You can\'t make a decison', ephemeral=True)
-            
-            send_btn.callback = send_btn_callback
-            cancel_send_btn.callback = cancel_btn_callback
+                    new_sender_bank_balance = user_data[3] - amount
+                    new_receiver_bank_balance = member_data[3] + amount
+                    
+                    # Update Sender bank balance 
+                    self.update_user(user_id, user_data[2], new_sender_bank_balance)
+
+                    # Update receiver bank balance
+                    self.update_user(member_id, member_data[2], new_receiver_bank_balance)
+
+                    # Inserting Transaction record 
+                    with db_connection() as conn:
+                        c = conn.cursor()
+                        # Send transaction record
+                        c.execute(
+                            """INSERT INTO Transaction (UserId, Amount, TransactionDate, TransactionType) VALUES (?, ?, ?, ?)""",
+                            (user_id, amount, Economy.date, 'send')
+                        )
+
+                        # Receive transaction record
+                        c.execute(
+                            """INSERT INTO Transaction (UserId, Amount, TransactionDate, TransactionType) VALUES (?, ?, ?, ?)""",
+                            (member_id, amount, Economy.date, 'receive')
+                        )
+                        conn.commit()
+
+                    trans_done = discord.Embed(
+                        title='**Transaction Completed 🚀**',
+                        description=(
+                            f'{interaction.user.display_name} sent {member.display_name} {amount} {Constants.COIN}'
+                        ),
+                        color=discord.Color.dark_teal()
+                    )
+                    await interaction.response.edit_message(embed=trans_done, view=None)
+            else:
+                await interaction.response.send_message('You can\'t make a decison', ephemeral=True)
+        
+        async def cancel_btn_callback(interaction: discord.Interaction) -> None:
+            if interaction.user.id == int(user_id):
+                cancel_embed = discord.Embed(
+                    title='Transaction Canceld ❌',
+                    description=f'{interaction.user.display_name} Canceld the transaction to {member.display_name}',
+                    color=discord.Color.dark_red()
+                )
+                await interaction.response.edit_message(embed=cancel_embed, view=None)
+            else:
+                await interaction.response.send_message('You can\'t make a decison', ephemeral=True)
+        
+        send_btn.callback = send_btn_callback
+        cancel_send_btn.callback = cancel_btn_callback
 
     @app_commands.command(name='withdraw', description='Move money from bank to your wallet')
     async def withdraw(self, interaction: discord.Interaction, amount: int = 100) -> None:
         if str(interaction.guild) and str(interaction.guild_id) != server:
             await self.send_inv_embed(interaction)
         else:
-            users = self.get_bank_data()
-            user_id = str(interaction.user.id)
-            if user_id not in users:
+            user_id = interaction.user.id
+            user_data = self.get_user_data(user_id)
+            if user_data is None:
                 await interaction.response.send_message('You can\'t withdraw from bank without bank account.\nUse `/balance` to create one.', ephemeral=True)
+                return
+
+            amount = abs(amount)
+            if amount > user_data[3]:
+                err_embed = discord.Embed(
+                    title='Invalid credit Withdraw',
+                    description=(
+                        f'Your {Constants.BANK}: {user_data[3]} {Constants.COIN}\nYou can\'t withdraw {amount} {Constants.COIN}'
+                    ),
+                    color=discord.Color.dark_red()
+                )
+                await interaction.response.send_message(embed=err_embed)
             else:
-                amount = abs(amount)
-                if amount > users[user_id]['bank']:
-                    err_embed = discord.Embed(
-                        title='Invalid credit Withdraw',
-                        description=(
-                            f'Your **Bank 🏛**: {users[user_id]['bank']} 🍀\nYou can\'t withdraw {amount} 🍀'
-                        ),
-                        color=discord.Color.dark_red()
-                    )
-                    await interaction.response.send_message(embed=err_embed)
-                else:
-                    with open(bank_file, 'w') as f:
-                        users[user_id]['wallet'] += amount
-                        users[user_id]['bank'] -= amount
-                        json.dump(users, f, indent=2)
-                    wd_embed = discord.Embed(
-                        title='Successful Withdrawal ✅',
-                        description=(
-                            f'Your **Wallet 💰**: {users[user_id]['wallet']} 🍀\n\n'
-                            f'Your **Bank 🏛**: {users[user_id]['bank']} 🍀'
-                        ),
-                        color=discord.Color.green()
-                    )
-                    await interaction.response.send_message(embed=wd_embed)
+                new_wallet_balance = user_data[2] + amount
+                new_bank_balance = user_data[3] - amount
+                self.update_user(user_id, new_wallet_balance, new_bank_balance)
+                wd_embed = discord.Embed(
+                    title='Successful Withdrawal ✅',
+                    description=(
+                        f'Your {Constants.WALLET}: {new_wallet_balance} {Constants.COIN}\n\n'
+                        f'Your {Constants.BANK}: {new_bank_balance} {Constants.COIN}'
+                    ),
+                    color=discord.Color.green()
+                )
+                await interaction.response.send_message(embed=wd_embed)
 
     @app_commands.command(name='deposit', description='Move money form wallet to your bank')
     async def deposit(self, interaction: discord.Interaction, amount: int = 100) -> None:
         if str(interaction.guild) and str(interaction.guild_id) != server:
             await self.send_inv_embed(interaction)
         else:
-            users = self.get_bank_data()
-            user_id = str(interaction.user.id)
-            if user_id not in users:
+            user_id = interaction.user.id
+            user_data = self.get_user_data(user_id)
+            if user_data is None:
                 await interaction.response.send_message('You can\'t deposit to bank without bank account.\nUse `/balance` to create one.', ephemeral=True)
+                return
+            
+            amount = abs(amount)
+            if amount > user_data[2]:
+                err_embed = discord.Embed(
+                    title='Invalid credit Deposit',
+                    description=(
+                        f'Your {Constants.WALLET}: {user_data[2]} {Constants.COIN}\nYou can\'t deposit {amount} {Constants.COIN}'
+                    ),
+                    color=discord.Color.dark_red()
+                )
+                await interaction.response.send_message(embed=err_embed)
             else:
-                amount = abs(amount)
-                if amount > users[user_id]['wallet']:
-                    err_embed = discord.Embed(
-                        title='Invalid credit Deposit',
-                        description=(
-                            f'Your **Wallet 💰**: {users[user_id]['wallet']} 🍀\nYou can\'t deposit {amount} 🍀'
-                        ),
-                        color=discord.Color.dark_red()
-                    )
-                    await interaction.response.send_message(embed=err_embed)
-                else:
-                    with open(bank_file, 'w') as f:
-                        users[user_id]['wallet'] -= amount
-                        users[user_id]['bank'] += amount
-                        json.dump(users, f, indent=2)
-                    wd_embed = discord.Embed(
-                        title='Successful Deposit ✅',
-                        description=(
-                            f'Your **Wallet 💰**: {users[user_id]['wallet']} 🍀\n\n'
-                            f'Your **Bank 🏛**: {users[user_id]['bank']} 🍀'
-                        ),
-                        color=discord.Color.green()
-                    )
-                    await interaction.response.send_message(embed=wd_embed)
+                new_wallet_balance = user_data[2] - amount
+                new_bank_balance = user_data[3] + amount
+                self.update_user(user_id, new_wallet_balance, new_bank_balance)
+                wd_embed = discord.Embed(
+                    title='Successful Deposit ✅',
+                    description=(
+                        f'Your {Constants.WALLET}: {new_wallet_balance} {Constants.COIN}\n\n'
+                        f'Your {Constants.BANK}: {new_bank_balance} {Constants.COIN}'
+                    ),
+                    color=discord.Color.green()
+                )
+                await interaction.response.send_message(embed=wd_embed)
 
     @app_commands.command(name='leaderboard', description='Show the richest 10 people in the Guild')
     async def leaderboard(self, interaction: discord.Interaction) -> None:
         if str(interaction.guild) and str(interaction.guild_id) != server:
             await self.send_inv_embed(interaction)
         else:
-            users = self.get_bank_data()
+            with db_connection() as conn:
+                c = conn.cursor()
+                c.execute("""SELECT username, wallet, bank FROM Users""")
+                users = c.fetchall()
+            
             leaderboard_embed = discord.Embed(
                 color=discord.Color.green()
             )
             leaderboard = []
-            for user_id in users:
-                usermention = f'<@{user_id}>'
-                total_money = users[user_id]['wallet'] + users[user_id]['bank']
-                member = (usermention, total_money)
+
+            for user in users:
+                username = user[0]
+                total_money = user[1] + user[2]
+                member = (username, total_money)
                 leaderboard.append(member)
 
             sorted_leaderboard = sorted(leaderboard, key=lambda x: x[1], reverse=True)
 
             leaderboard_text =""
             
-            for i, (usermention, total_money) in enumerate(sorted_leaderboard[:10], start=1):
-                leaderboard_text += f'{i}. {usermention} - {total_money} 🍀\n'
+            for i, (username, total_money) in enumerate(sorted_leaderboard[:10], start=1):
+                leaderboard_text += f'{i}. {username} - {total_money} {Constants.COIN}\n'
             
             leaderboard_embed.add_field(
                 name='**Top 10 Richest Members**',

@@ -1,15 +1,15 @@
 {
   "480830625805369374": {
     "wallet": 300,
-    "bank": 2148,
+    "bank": 2248,
     "transactions": {
       "last_sand": {
         "amount": 20,
         "date": "February 16, 2025 at 12:17 AM"
       },
       "last_recive": {
-        "amount": 0,
-        "date": 0
+        "amount": 100,
+        "date": "February 17, 2025 at 12:07 AM"
       }
     },
     "inventory": {}
@@ -36,6 +36,21 @@
       "last_sand": {
         "amount": 10,
         "date": "February 16, 2025 at 12:01 AM"
+      },
+      "last_recive": {
+        "amount": 0,
+        "date": 0
+      }
+    },
+    "inventory": {}
+  },
+  "631887208038793257": {
+    "wallet": 0,
+    "bank": 1800,
+    "transactions": {
+      "last_sand": {
+        "amount": 100,
+        "date": "February 17, 2025 at 12:07 AM"
       },
       "last_recive": {
         "amount": 0,
