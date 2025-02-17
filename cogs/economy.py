@@ -1,4 +1,3 @@
-import json
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -37,6 +36,17 @@ class Economy(commands.Cog):
         )
         await interaction.response.send_message(embed=inv_embed)
     
+    def create_embed(self,interaction: discord.Interaction, title: str, description: str, color: discord.Colour) -> discord.Embed:
+        user = interaction.user.name
+        icon = interaction.user.display_avatar
+        em = discord.Embed(
+            title=title,
+            description=description,
+            color=color
+        )
+        em.set_footer(text=f'Used by: {user} | {Economy.date}', icon_url=icon)
+        return em
+    
     def get_user_data(self, user_id: int):
         with db_connection() as conn:
             c = conn.cursor()
@@ -52,7 +62,7 @@ class Economy(commands.Cog):
     def update_user(self, user_id: int, wallet: int, bank: int) -> None:
         with db_connection() as conn:
             c = conn.cursor()
-            c.execute("""UPDATE Users SET wallet = ?, SET bank = ? WHERE id = ?""", (wallet, bank, user_id))
+            c.execute("""UPDATE Users SET wallet = ?, bank = ? WHERE id = ?""", (wallet, bank, user_id))
             conn.commit()
 
     async def open_account(self, interaction) -> discord.Embed:
@@ -86,14 +96,10 @@ class Economy(commands.Cog):
                     return
                 # Show the balance of the account
                 username, wallet, bank =user_data[1], user_data[2], user_data[3]
-                exist_acc = discord.Embed(
-                    title=f'{username}\'s Balance',
-                    description=(
-                        f'{Constants.WALLET}: {wallet} {Constants.COIN}\n\n'
-                        f'{Constants.BANK}: {bank} {Constants.COIN}'
-                    ),
-                    color=discord.Color.green()
-                )
+                exist_acc = self.create_embed(interaction,
+                                            title=f'{username}\'s Balance',
+                                            description=f'{Constants.WALLET}: {wallet} {Constants.COIN}\n\n{Constants.BANK}: {bank} {Constants.COIN}',
+                                            color=discord.Color.green())
                 await interaction.response.send_message(embed=exist_acc)
             else:
                 member_id = member.id
@@ -103,7 +109,8 @@ class Economy(commands.Cog):
                     return
                 
                 username, wallet, bank = member_data[1], member_data[2], member_data[3]
-                member_embed = discord.Embed(
+                member_embed = self.create_embed(
+                    interaction,
                     title=f'{username}\'s Balance',
                     description=(
                         f'{Constants.WALLET}: {wallet} {Constants.COIN}\n\n'
@@ -133,7 +140,8 @@ class Economy(commands.Cog):
             # check if amount is valid then add it to bank
             new_bank_balance = member_data[3] + abs(amount)
             self.update_user(member_id, member_data[2], new_bank_balance)
-            added_embed = discord.Embed(
+            added_embed = self.create_embed(
+                interaction,
                 title=f'{member.display_name} Has been rewareded with {amount} {Constants.COIN}',
                 description=f'His {Constants.BANK}:  {new_bank_balance} {Constants.COIN}',
                 color=discord.Color.yellow()
@@ -211,11 +219,12 @@ class Economy(commands.Cog):
                 return
             
             rand_amount = randint(500, 1001)
-            wallet , bank = user_data[2], user_data[3]
+            username, wallet , bank = user_data[1], user_data[2], user_data[3]
             new_bank_balance = bank + rand_amount
             self.update_user(user_id, wallet, new_bank_balance)
-            daily_embed = discord.Embed(
-                title=f'{interaction.user.display_name} Got a reward.',
+            daily_embed = self.create_embed(
+                interaction,
+                title=f'{username} Got a reward.',
                 description=(
                     f'Your {Constants.BANK} increased with {rand_amount} {Constants.COIN}\n\n'
                     f'{Constants.WALLET}: {wallet} {Constants.COIN}\n\n'
@@ -268,7 +277,8 @@ class Economy(commands.Cog):
             transaction_view = View()
             transaction_view.add_item(send_btn)
             transaction_view.add_item(cancel_send_btn)
-            verify_embed = discord.Embed(
+            verify_embed = self.create_embed(
+                interaction,
                 title='**Transaction verification**',
                 description=(
                     f'Are you sure you want to send {amount} {Constants.COIN} to {member.display_name}?'
@@ -280,12 +290,13 @@ class Economy(commands.Cog):
         async def send_btn_callback(interaction: discord.Interaction) -> None:
             if interaction.user.id == int(user_id):
                 if amount > user_data[3]:
-                    not_enough = discord.Embed(
+                    not_enough = self.create_embed(
+                        interaction,
                         title=f'You tried to send {amount} {Constants.COIN}',
                         description=f'Your {Constants.BANK}: {user_data[3]}',
                         color=discord.Color.dark_red()
                     )
-                    await interaction.response.send_message(embed=not_enough)
+                    await interaction.response.edit_message(embed=not_enough, view=None)
                 else:
                     new_sender_bank_balance = user_data[3] - amount
                     new_receiver_bank_balance = member_data[3] + amount
@@ -301,18 +312,19 @@ class Economy(commands.Cog):
                         c = conn.cursor()
                         # Send transaction record
                         c.execute(
-                            """INSERT INTO Transaction (UserId, Amount, TransactionDate, TransactionType) VALUES (?, ?, ?, ?)""",
+                            """INSERT INTO Transactions (UserId, Amount, TransactionDate, TransactionType) VALUES (?, ?, ?, ?)""",
                             (user_id, amount, Economy.date, 'send')
                         )
 
                         # Receive transaction record
                         c.execute(
-                            """INSERT INTO Transaction (UserId, Amount, TransactionDate, TransactionType) VALUES (?, ?, ?, ?)""",
+                            """INSERT INTO Transactions (UserId, Amount, TransactionDate, TransactionType) VALUES (?, ?, ?, ?)""",
                             (member_id, amount, Economy.date, 'receive')
                         )
                         conn.commit()
 
-                    trans_done = discord.Embed(
+                    trans_done = self.create_embed(
+                        interaction,
                         title='**Transaction Completed 🚀**',
                         description=(
                             f'{interaction.user.display_name} sent {member.display_name} {amount} {Constants.COIN}'
@@ -325,7 +337,8 @@ class Economy(commands.Cog):
         
         async def cancel_btn_callback(interaction: discord.Interaction) -> None:
             if interaction.user.id == int(user_id):
-                cancel_embed = discord.Embed(
+                cancel_embed = self.create_embed(
+                    interaction,
                     title='Transaction Canceld ❌',
                     description=f'{interaction.user.display_name} Canceld the transaction to {member.display_name}',
                     color=discord.Color.dark_red()
@@ -350,7 +363,8 @@ class Economy(commands.Cog):
 
             amount = abs(amount)
             if amount > user_data[3]:
-                err_embed = discord.Embed(
+                err_embed = self.create_embed(
+                    interaction,
                     title='Invalid credit Withdraw',
                     description=(
                         f'Your {Constants.BANK}: {user_data[3]} {Constants.COIN}\nYou can\'t withdraw {amount} {Constants.COIN}'
@@ -362,7 +376,8 @@ class Economy(commands.Cog):
                 new_wallet_balance = user_data[2] + amount
                 new_bank_balance = user_data[3] - amount
                 self.update_user(user_id, new_wallet_balance, new_bank_balance)
-                wd_embed = discord.Embed(
+                wd_embed = self.create_embed(
+                    interaction,
                     title='Successful Withdrawal ✅',
                     description=(
                         f'Your {Constants.WALLET}: {new_wallet_balance} {Constants.COIN}\n\n'
@@ -385,7 +400,8 @@ class Economy(commands.Cog):
             
             amount = abs(amount)
             if amount > user_data[2]:
-                err_embed = discord.Embed(
+                err_embed = self.create_embed(
+                    interaction,
                     title='Invalid credit Deposit',
                     description=(
                         f'Your {Constants.WALLET}: {user_data[2]} {Constants.COIN}\nYou can\'t deposit {amount} {Constants.COIN}'
@@ -397,7 +413,8 @@ class Economy(commands.Cog):
                 new_wallet_balance = user_data[2] - amount
                 new_bank_balance = user_data[3] + amount
                 self.update_user(user_id, new_wallet_balance, new_bank_balance)
-                wd_embed = discord.Embed(
+                wd_embed = self.create_embed(
+                    interaction,
                     title='Successful Deposit ✅',
                     description=(
                         f'Your {Constants.WALLET}: {new_wallet_balance} {Constants.COIN}\n\n'
@@ -414,32 +431,34 @@ class Economy(commands.Cog):
         else:
             with db_connection() as conn:
                 c = conn.cursor()
-                c.execute("""SELECT username, wallet, bank FROM Users""")
+                c.execute("""SELECT id, wallet, bank FROM Users""")
                 users = c.fetchall()
             
             leaderboard_embed = discord.Embed(
                 color=discord.Color.green()
             )
+            leaderboard_embed.set_author(name="📃 Server Balance Leaderboard", icon_url=interaction.guild.icon)
             leaderboard = []
 
             for user in users:
-                username = user[0]
+                usermention = f'<@{user[0]}>'
                 total_money = user[1] + user[2]
-                member = (username, total_money)
+                member = (usermention, total_money)
                 leaderboard.append(member)
 
             sorted_leaderboard = sorted(leaderboard, key=lambda x: x[1], reverse=True)
 
             leaderboard_text =""
             
-            for i, (username, total_money) in enumerate(sorted_leaderboard[:10], start=1):
-                leaderboard_text += f'{i}. {username} - {total_money} {Constants.COIN}\n'
+            for i, (usermention, total_money) in enumerate(sorted_leaderboard[:10], start=1):
+                leaderboard_text += f'{i}. {usermention} - {total_money} {Constants.COIN}\n'
             
             leaderboard_embed.add_field(
                 name='**Top 10 Richest Members**',
                 value=leaderboard_text,
                 inline=False
             )
+            leaderboard_embed.set_footer(text=f"Used by: {interaction.user.name} | {Economy.date}", icon_url=interaction.user.display_avatar)
             await interaction.response.send_message(embed=leaderboard_embed)
 
 

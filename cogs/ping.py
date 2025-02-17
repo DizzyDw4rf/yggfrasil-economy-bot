@@ -11,7 +11,12 @@ class Ping(commands.Cog):
     @app_commands.command(name='ping', description='Shows bot\'s latency')
     async def ping(self, interaction: discord.Interaction) -> None:
         bot_latency = round(self.client.latency * 1000)
-        await interaction.response.send_message(f'{bot_latency}ms', ephemeral=True)
+        ping_embed = discord.Embed(
+            title="Pong! 🏓",
+            description=f"**⌛ Time:** {bot_latency}ms",
+            color=discord.Color.brand_green()
+        )
+        await interaction.response.send_message(embed=ping_embed, ephemeral=True)
 
 
 async def setup(client):

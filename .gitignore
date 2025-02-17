@@ -3,3 +3,4 @@ venv/
 .idea/
 .env
 economy.db
+main_bank.json
