@@ -6,11 +6,13 @@ class Constants():
     Handles the constant variables in embeds -> Bank, wallet, Coin
 
     :Attributes: 
-    Bank -> `**Bank 🏛**`
-    Wallet -> `**Wallet 💰**`
-    Main Coin -> `<:Coin_Tails:1340802182705840149>`
-    Coin Heads -> `<:Coin_Heads:1340802116565995652>`
-    Coin Tails -> `<:Coin_Tails:1340802182705840149>`
+    BANK -> `**Bank 🏛**`
+    WALLET -> `**Wallet 💰**`
+    COIN-> `Main Coin <:Coin_Tails:1340802182705840149>`
+    COIN_HEADS -> `<:Coin_Heads:1340802116565995652>`
+    Coin_TAILS -> `<:Coin_Tails:1340802182705840149>`
+    WORK_REPLIES -> A list of possible work replies 
+    CRIME_REPLIES -> A list of possible crime replies
     """
 
     BANK = '**Bank 🏛**'
@@ -19,7 +21,7 @@ class Constants():
     COIN_HEAD = '<:Coin_Heads:1340802116565995652>'
     COIN_TAILS = '<:Coin_Tails:1340802182705840149>'
 
-    WORK_REPLAIES = [
+    WORK_REPLIES = [
         "You have collected eggs",
         "You have chopped wood",
         "You have delivered the mail",
@@ -47,7 +49,7 @@ class Constants():
         "You have harvested berries",
         "You have crafted a basket",
         "You have swept the floors",
-        "You have built a fence and",
+        "You have built a fence",
         "You have stitched a blanket",
         "You have repaired the wagon",
         "You have collected herbs",
@@ -60,4 +62,47 @@ class Constants():
         "You have mended clothes",
         "You have fixed the fence",
         "You have picked fruit",
+        "You haven't do anything but still get a Paycheck"
+    ]
+    CRIME_REPLIES = [
+        "You\'ve swapped the sugar for salt in the coffee shop",
+        "You\'ve taken the last piece of cake from the party",
+        "You\'ve left a trail of breadcrumbs leading right to you",
+        "You\'ve \'borrowed\' a neighbor\'s lawn chair for a quick nap",
+        "You\'ve pulled the old whoopee cushion trick at a formal dinner",
+        "You\'ve swapped all the pencils for pens in the office drawer",
+        "You\'ve sneaked a peek at someone\'s phone while they were texting",
+        "You\'ve eaten all the ice cream from the freezer",
+        "You\'ve glued someone\'s shoes to the floor",
+        "You\'ve \'accidentally\' swapped someone\'s shampoo with conditioner",
+        "You\'ve left a trail of glitter wherever you go",
+        "You\'ve locked someone\'s car keys in their car",
+        "You\'ve secretly switched all the TV channels to the home shopping network",
+        "You\'ve \'accidentally\' spilled water all over the library books",
+        "You\'ve stolen the last slice of pizza from the pizza box",
+        "You\'ve hidden the TV remote and are now on the run",
+        "You\'ve scribbled on someone\'s homework and blamed the dog",
+        "You\'ve stuffed a bunch of balloons in someone\'s closet",
+        "You\'ve taken a handful of cookies and left nothing but crumbs",
+        "You\'ve put a tack on the chair in the meeting room",
+        "You\'ve switched all the street signs around the block",
+        "You\'ve borrowed someone\'s umbrella and forgotten to return it",
+        "You\'ve swapped all the ketchup for mustard in the fridge",
+        "You\'ve eaten the last cookie and left the crumbs behind",
+        "You\'ve hidden all the spoons in the kitchen drawers",
+        "You\'ve \'accidentally\' spilled coffee on someone\'s favorite book",
+        "You\'ve sneaked into the movie theater with a full picnic",
+        "You\'ve rearranged the furniture just to confuse everyone",
+        "You\'ve taken all the Wi-Fi passwords and won\'t share them",
+        "You\'ve left a trail of banana peels all over the street",
+        "You\'ve \'borrowed\' someone\'s hat and worn it for a week",
+        "You\'ve put toothpaste in someone\'s shoes",
+        "You\'ve switched out all the signs in the grocery store for the wrong products",
+        "You\'ve taken all the batteries out of the remote and hidden them.",
+        "You\'ve hidden all the socks from the laundry basket",
+        "You\'ve switched the labels on all the jars in the pantry",
+        "You\'ve swapped the sugar with the salt in the baking cupboard",
+        "You\'ve eaten all the chips and left the empty bag in the pantry",
+        "You\'ve secretly set all the clocks in the house an hour forward",
+        "You\'ve taped a \'kick me\' sign to someone\'s back without them noticing",
     ]

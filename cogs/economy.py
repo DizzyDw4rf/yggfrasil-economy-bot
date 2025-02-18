@@ -6,7 +6,6 @@ from discord.ui import View, Button
 from random import randint
 from datetime import datetime
 from src.bot_status import BotStatus
-from src.utils.tools import formatted_time
 from src.utils.constants import Constants
 from src.databases import create_user_table, create_transaction_table, db_connection
 
@@ -15,12 +14,12 @@ create_user_table()
 create_transaction_table()
 
 
-BotStatus.set_debug(True)
+BotStatus.set_debug(False)
 server = BotStatus.get_server()
 
 class Economy(commands.Cog):
 
-    date = formatted_time(str(datetime.now()))
+    tax_rate = 0.02 # Default tax rate ex -> Pay 100 -- 98 after taxes
 
     def __init__(self, client):
         self.client = client
@@ -42,9 +41,10 @@ class Economy(commands.Cog):
         em = discord.Embed(
             title=title,
             description=description,
-            color=color
+            color=color,
+            timestamp=datetime.now()
         )
-        em.set_footer(text=f'Used by: {user} | {Economy.date}', icon_url=icon)
+        em.set_footer(text=f'Used by: {user}', icon_url=icon)
         return em
     
     def get_user_data(self, user_id: int):
@@ -74,7 +74,8 @@ class Economy(commands.Cog):
             description=(
                 f'{interaction.user.mention}\'s fresh Bank Account.\n\n'
                 f'{Constants.WALLET}: 500 {Constants.COIN}\n\n'
-                f'{Constants.BANK}: 500 {Constants.COIN}'
+                f'{Constants.BANK}: 500 {Constants.COIN}\n\n'
+                f'**Total**: 1000 {Constants.COIN}'
             ),
             color=discord.Color.blue()
         )
@@ -96,10 +97,15 @@ class Economy(commands.Cog):
                     return
                 # Show the balance of the account
                 username, wallet, bank =user_data[1], user_data[2], user_data[3]
-                exist_acc = self.create_embed(interaction,
-                                            title=f'{username}\'s Balance',
-                                            description=f'{Constants.WALLET}: {wallet} {Constants.COIN}\n\n{Constants.BANK}: {bank} {Constants.COIN}',
-                                            color=discord.Color.green())
+                exist_acc = self.create_embed(
+                    interaction,
+                    title=f'{username}\'s Balance',
+                    description=(f'{Constants.WALLET}: {wallet} {Constants.COIN}\n\n'
+                                f'{Constants.BANK}: {bank} {Constants.COIN}\n\n'
+                                f'**Total**: {bank + wallet} {Constants.COIN}'
+                                ),
+                    color=discord.Color.green()
+                )
                 await interaction.response.send_message(embed=exist_acc)
             else:
                 member_id = member.id
@@ -114,7 +120,8 @@ class Economy(commands.Cog):
                     title=f'{username}\'s Balance',
                     description=(
                         f'{Constants.WALLET}: {wallet} {Constants.COIN}\n\n'
-                        f'{Constants.BANK}: {bank} {Constants.COIN}'
+                        f'{Constants.BANK}: {bank} {Constants.COIN}\n\n'
+                        f'**Total**: {bank + wallet} {Constants.COIN}'
                     ),
                     color=discord.Colour.green()
                 )
@@ -173,7 +180,8 @@ class Economy(commands.Cog):
                 if amount <= bank: # Remove from bank if possible
                     new_bank_balance = bank - amount
                     self.update_user(member_id, wallet, new_bank_balance)
-                    rmv_embed = discord.Embed(
+                    rmv_embed = self.create_embed(
+                        interaction,
                         title=f'{member.display_name} has been punished',
                         description=(
                             f'His {Constants.BANK}:  {new_bank_balance} {Constants.COIN}'
@@ -184,7 +192,8 @@ class Economy(commands.Cog):
                 else: # Take all from bank and remaining from wallet
                     new_wallet_balance = wallet - (amount - bank)
                     self.update_user(member_id, new_wallet_balance, 0)
-                    rmv_embed = discord.Embed(
+                    rmv_embed = self.create_embed(
+                        interaction,
                         title=f'{member.display_name} has been punished',
                         description=(
                             f'His {Constants.WALLET}: {new_wallet_balance} {Constants.COIN}\n'
@@ -196,7 +205,8 @@ class Economy(commands.Cog):
             else: # amount > total balance
                 # Remove all in bank and wallet
                 self.update_user(member_id, 0, 0)
-                rmv_embed = discord.Embed(
+                rmv_embed = self.create_embed(
+                    interaction,
                         title=f'{member.display_name} has been punished',
                         description=(
                             f'His {Constants.WALLET}: 0 {Constants.COIN}\n'
@@ -242,8 +252,8 @@ class Economy(commands.Cog):
             hours = remaining_time // 3600
             minutes = (remaining_time % 3600) // 60
             cd_embed = discord.Embed(
-                title='**⏰ You are in timeout**',
-                description=f'You must wait {int(hours)} hours and {int(minutes)} minutes before using this command again.',
+                title='**⏰ You are in timeout!**',
+                description=f'You must wait `{int(hours)}` hours and `{minutes}` minutes before using this command again.',
                 color=discord.Color.dark_red()
             )
             await interaction.response.send_message(embed=cd_embed, ephemeral=True)
@@ -435,7 +445,8 @@ class Economy(commands.Cog):
                 users = c.fetchall()
             
             leaderboard_embed = discord.Embed(
-                color=discord.Color.green()
+                color=discord.Color.green(),
+                timestamp=datetime.now()
             )
             leaderboard_embed.set_author(name="📃 Server Balance Leaderboard", icon_url=interaction.guild.icon)
             leaderboard = []
@@ -458,7 +469,7 @@ class Economy(commands.Cog):
                 value=leaderboard_text,
                 inline=False
             )
-            leaderboard_embed.set_footer(text=f"Used by: {interaction.user.name} | {Economy.date}", icon_url=interaction.user.display_avatar)
+            leaderboard_embed.set_footer(text=f"Used by: {interaction.user.name}", icon_url=interaction.user.display_avatar)
             await interaction.response.send_message(embed=leaderboard_embed)
 
 
