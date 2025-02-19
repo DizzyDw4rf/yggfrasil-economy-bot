@@ -30,6 +30,7 @@ class MyBot(commands.Bot):
                     logger.info(f"Loaded Cog: {filename[:-3]}")
                 except Exception as e:
                     logger.error(f"Failed to load Cog: {filename[:-3]}")
+                    logger.error(e)
     
     async def start_bot(self, token) -> None:
         async with self:

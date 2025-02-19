@@ -1,12 +1,16 @@
 import discord
 import logging
 import config
+from datetime import datetime
+from discord import ButtonStyle
+from discord.ui import View, Button
 from discord import app_commands
 from discord.ext import commands
 from random import choice, randint
 from src.bot_status import BotStatus
 from src.utils.constants import Constants
-from src.databases import db_connection 
+from src.services.databases import DatabaseService
+from src.services.slot_machine import SlotMachineService
 
 
 config.dictConfig(config.LOGGING_CONFIG)
@@ -49,13 +53,13 @@ class Games(commands.Cog):
         await interaction.response.send_message(embed=err_embed, ephemeral=True)
 
     def get_user_data(self, user_id: int):
-        with db_connection() as conn:
+        with DatabaseService.db_connection() as conn:
             c = conn.cursor()
             c.execute("""SELECT * FROM Users WHERE id = ?""", (user_id,))
             return c.fetchone()
     
     def update_user_wallet(self, user_id: int, wallet: int):
-        with db_connection() as conn:
+        with DatabaseService.db_connection() as conn:
             c = conn.cursor()
             c.execute("""UPDATE Users SET wallet = ? WHERE id = ?""", (wallet, user_id))
             conn.commit()    
@@ -116,7 +120,7 @@ class Games(commands.Cog):
             return
         
         choices = choice(Constants.WORK_REPLIES) # Getting a random reply
-        rand_amt = randint(70, 251) # Getting a random payment to update wallet with
+        rand_amt = randint(70, 250) # Getting a random payment to update wallet with
 
         new_wallet_balance = user_data[2] + rand_amt
 
@@ -256,6 +260,129 @@ class Games(commands.Cog):
                 color=discord.Color.dark_red()
             )
             await interaction.response.send_message(embed=cd_embed, ephemeral=True)
+
+    @app_commands.command(name='jackbot', description='Spin the wheel and get a chance to win the jackbot prize')
+    async def jackbot(self, interaction: discord.Interaction) -> None:
+        if str(interaction.guild) and str(interaction.guild_id) != server:
+            logger.info(f"{interaction.user.name} Tried to use {interaction.command.name} in {interaction.guild.id}")
+            await self.send_inv_embed(interaction)
+            return
+
+        user_id = interaction.user.id
+
+        current_jackbot_prize = SlotMachineService.get_jackbot_prize()
+
+        jackbot_embed = discord.Embed(
+            title="**Welcome To Jackbot**",
+            description=(
+                f"Jackbot is the game of luck, wanna try yours?\n"
+                f"Spin the wheel for just a total of **300** {Constants.COIN}\n"
+                f"and get a chance to win a Huge amount of {Constants.COIN}\n\n"
+                f"```This Message Will auto delete after 5 mins```"
+            ),
+            color=discord.Color.gold()
+        )
+        jackbot_embed.add_field(
+            name="**Current Prize Pool:**",
+            value=f"{current_jackbot_prize:,}"
+        )
+        jackbot_embed.set_author(icon_url=interaction.guild.icon, name=f"{interaction.guild.name}'s Jackbot")
+        jackbot_embed.set_footer(text=f"Used by: {interaction.user.name}", icon_url=interaction.user.display_avatar)
+
+        spin_btn = Button(
+            style=ButtonStyle.primary,
+            label="Spin",
+            emoji=f"{Constants.SLOT_EMOJI}"
+        )
+
+        exit_btn = Button(
+            style=ButtonStyle.danger,
+            label="Exit",
+            emoji="✖"
+        )
+
+        jackbot_view = View()
+        jackbot_view.add_item(spin_btn)
+        jackbot_view.add_item(exit_btn)
+
+        await interaction.response.send_message(embed=jackbot_embed, view=jackbot_view, delete_after=300)
+
+        async def spin_btn_callback(interaction: discord.Interaction) -> None:
+            if interaction.user.id != user_id:
+                await interaction.response.send_message("You can't use other member game", ephemeral=True)
+                return
+
+            player_id = interaction.user.id
+            player_data = self.get_user_data(player_id)
+
+            if player_data is None:
+                await interaction.response.send_message("You don't have bank account use `/balance`", ephemeral=True)
+                return
+            
+            if player_data[2] < 300:
+                not_enough = self.create_embed(interaction, description=f"You only have {player_data[2]} {Constants.COIN}, You need 300 {Constants.COIN} to play", color=discord.Color.dark_red())
+                await interaction.response.send_message(embed=not_enough, ephemeral=True)
+                return
+            
+            teer1 = choice(Constants.SLOT_TEERS)
+            teer2 = choice(Constants.SLOT_TEERS)
+            teer3 = choice(Constants.SLOT_TEERS)
+
+            if teer1 == teer2 == teer3:
+                new_wallet_balance = player_data[2] + (current_jackbot_prize - 300)
+                spin_embed = discord.Embed(
+                    title = "**You Won The Jackbot**",
+                    description =(
+                        f"Today is your lucky day! You have won the grand prize with total of {current_jackbot_prize}\n\n"
+                        f"Your wallet now is filled with {new_wallet_balance} {Constants.COIN}\n\n"
+                    ),
+                    color = discord.Color.gold(),
+                    timestamp=datetime.now()
+                )
+                SlotMachineService.update_jackbot_prize(10000)
+                spin_embed.add_field(
+                    name="**Machine Stopped on:**",
+                    value=f"{teer1}  {teer2}  {teer3}"
+                )
+                spin_embed.set_footer(text=f"Used by: {interaction.user.name}", icon_url=interaction.user.display_avatar)
+                await interaction.response.edit_message(content=f"@everyone {interaction.user.mention} has just won the prize pool", embed=spin_embed, view=None)
+            else:
+                new_wallet_balance = player_data[2] - 300
+                spin_embed = discord.Embed(
+                    title = "**You lost**",
+                    description = f"This time you were unlucky and lost 300 {Constants.COIN}\nYou have {new_wallet_balance} {Constants.COIN} in your wallet",
+                    color = discord.Color.dark_red(),
+                    timestamp=datetime.now()
+                )
+                SlotMachineService.update_jackbot_prize(current_jackbot_prize + 300)
+            
+                spin_embed.add_field(
+                    name="**Machine Stopped on:**",
+                    value=f"{teer1}  {teer2}  {teer3}"
+                )
+                spin_embed.set_footer(text=f"Used by: {interaction.user.name}", icon_url=interaction.user.display_avatar)
+                self.update_user_wallet(player_id, new_wallet_balance)
+                await interaction.response.edit_message(embed=spin_embed, view=None)
+            
+            logger.info(f"{interaction.user.name} spinned the wheel")
+
+        async def exit_btn_callback(interaction: discord.Interaction) -> None:
+            if interaction.user.id != user_id:
+                await interaction.response.send_message("You can't use other member game", ephemeral=True)
+                return
+            
+            exit_embed = discord.Embed(
+                title="**Jackbot game canceled**",
+                description="You have canceld the game",
+                color=discord.Color.dark_red()
+            )
+            exit_embed.set_footer(text=f"Used by: {interaction.user.name}", icon_url=interaction.user.display_avatar)
+            
+            logger.info(f"{interaction.user.name} Canceld jackbot game!")
+            await interaction.response.edit_message(embed=exit_embed, view=None, delete_after=1.5)
+
+        spin_btn.callback = spin_btn_callback
+        exit_btn.callback = exit_btn_callback
 
 
 async def setup(client):

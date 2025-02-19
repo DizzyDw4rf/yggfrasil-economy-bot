@@ -8,9 +8,10 @@ from discord.ui import View, Button
 from random import randint
 from datetime import datetime
 from src.bot_status import BotStatus
-from src.utils.tools import formatted_time
+from src.utils.tools import formatted_time, remove_tax
 from src.utils.constants import Constants
-from src.databases import db_connection, create_user_table, create_transaction_table
+from src.services.databases import DatabaseService
+from src.services.tax import TaxService
 
 
 config.dictConfig(config.LOGGING_CONFIG)
@@ -19,15 +20,12 @@ logger = logging.getLogger("discord")
 BotStatus.set_debug(False)
 server = BotStatus.get_server()
 
-create_user_table()
-create_transaction_table()
+DatabaseService.create_user_table()
+DatabaseService.create_transaction_table()
 
 class Economy(commands.Cog):
-
     
     date = formatted_time(str(datetime.now()))
-
-    tax_rate = 0.02 # Default tax rate ex -> Pay 100 -- 98 after taxes
     
     def __init__(self, client):
         self.client = client
@@ -59,19 +57,19 @@ class Economy(commands.Cog):
         return em
     
     def get_user_data(self, user_id: int):
-        with db_connection() as conn:
+        with DatabaseService.db_connection() as conn:
             c = conn.cursor()
             c.execute("""SELECT * FROM Users WHERE id = ?""", (user_id,))
             return c.fetchone()
     
     def create_user(self, user_id: int, username: str) -> None:
-        with db_connection() as conn:
+        with DatabaseService.db_connection() as conn:
             c = conn.cursor()
             c.execute("""INSERT INTO Users (id, username) VALUES (?, ?)""", (user_id, username))
             conn.commit()
     
     def update_user(self, user_id: int, wallet: int, bank: int) -> None:
-        with db_connection() as conn:
+        with DatabaseService.db_connection() as conn:
             c = conn.cursor()
             c.execute("""UPDATE Users SET wallet = ?, bank = ? WHERE id = ?""", (wallet, bank, user_id))
             conn.commit()
@@ -252,7 +250,7 @@ class Economy(commands.Cog):
                 await interaction.response.send_message('Use `/balance` to open account first.', ephemeral=True)
                 return
             
-            rand_amount = randint(500, 1001)
+            rand_amount = randint(500, 1000)
             username, wallet , bank = user_data[1], user_data[2], user_data[3]
             new_bank_balance = bank + rand_amount
             self.update_user(user_id, wallet, new_bank_balance)
@@ -289,43 +287,46 @@ class Economy(commands.Cog):
         if str(interaction.guild) and str(interaction.guild_id) != server:
             logger.info(f"{interaction.user.name} Tried to use {interaction.command.name} in {interaction.guild.id}")
             await self.send_inv_embed(interaction)
-        else:
-            user_id = interaction.user.id
-            member_id = member.id
-            if user_id == member_id:
-                logger.info(f"{interaction.user.name} Tried to send himself credits")
-                await interaction.response.send_message("You can't send yourself credits", ephemeral=True)
-                return
-            user_data = self.get_user_data(user_id)
-            member_data = self.get_user_data(member_id)
-            if user_data is None or member_data is None:
-                await interaction.response.send_message('User Not Found in bank account.\nMake sure to use"/balance" to create account', ephemeral=True)
-                return
+            return
+        
+        user_id = interaction.user.id
+        member_id = member.id
+        if user_id == member_id:
+            logger.info(f"{interaction.user.name} Tried to send himself credits")
+            await interaction.response.send_message("You can't send yourself credits", ephemeral=True)
+            return
+        user_data = self.get_user_data(user_id)
+        member_data = self.get_user_data(member_id)
+        if user_data is None or member_data is None:
+            await interaction.response.send_message('User Not Found in bank account.\nMake sure to use"/balance" to create account', ephemeral=True)
+            return
 
-            send_btn = Button(
-                style= ButtonStyle.primary,
-                label='Send',
-                emoji='🚀'
-            )
-            cancel_send_btn = Button(
-                style= ButtonStyle.danger,
-                label='Cancel',
-                emoji='✖'
-            )
-            
-            transaction_view = View()
-            transaction_view.add_item(send_btn)
-            transaction_view.add_item(cancel_send_btn)
-            verify_embed = self.create_embed(
-                interaction,
-                title='**Transaction verification**',
-                description=(
-                    f'Are you sure you want to send {amount} {Constants.COIN} to {member.display_name}?\n\n'
-                    f"```This message will be deleted after 5 mins if no action taken.```"
-                ),
-                color=discord.Color.blurple()
-            )
-            await interaction.response.send_message(embed=verify_embed, view=transaction_view, delete_after=300)
+        taxed_amount = remove_tax(amount=amount, tax_rate=TaxService.get_tax_rate()) # Calculating amount after taking Taxes
+
+        send_btn = Button(
+            style= ButtonStyle.primary,
+            label='Send',
+            emoji='🚀'
+        )
+        cancel_send_btn = Button(
+            style= ButtonStyle.danger,
+            label='Cancel',
+            emoji='✖'
+        )
+        
+        transaction_view = View()
+        transaction_view.add_item(send_btn)
+        transaction_view.add_item(cancel_send_btn)
+        verify_embed = self.create_embed(
+            interaction,
+            title='**Transaction verification**',
+            description=(
+                f'Are you sure you want to send {amount} {Constants.COIN} to {member.display_name}?\n\n'
+                f"```This message will be deleted after 5 mins if no action taken.```"
+            ),
+            color=discord.Color.blurple()
+        )
+        await interaction.response.send_message(embed=verify_embed, view=transaction_view, delete_after=300)
 
         async def send_btn_callback(interaction: discord.Interaction) -> None:
             if interaction.user.id == int(user_id):
@@ -339,7 +340,7 @@ class Economy(commands.Cog):
                     await interaction.response.edit_message(embed=not_enough, view=None)
                 else:
                     new_sender_bank_balance = user_data[3] - amount
-                    new_receiver_bank_balance = member_data[3] + amount
+                    new_receiver_bank_balance = member_data[3] + taxed_amount
                     
                     # Update Sender bank balance 
                     self.update_user(user_id, user_data[2], new_sender_bank_balance)
@@ -348,7 +349,7 @@ class Economy(commands.Cog):
                     self.update_user(member_id, member_data[2], new_receiver_bank_balance)
 
                     # Inserting Transaction record 
-                    with db_connection() as conn:
+                    with DatabaseService.db_connection() as conn:
                         c = conn.cursor()
                         # Send transaction record
                         c.execute(
@@ -367,7 +368,8 @@ class Economy(commands.Cog):
                         interaction,
                         title='**Transaction Completed 🚀**',
                         description=(
-                            f'{interaction.user.display_name} sent {member.display_name} {amount} {Constants.COIN}'
+                            f'{interaction.user.display_name} sent {member.display_name} {amount} {Constants.COIN}\n\n'
+                            f'```{member.name} received {taxed_amount} after taking taxes```'
                         ),
                         color=discord.Color.dark_teal()
                     )
@@ -403,6 +405,8 @@ class Economy(commands.Cog):
                 await interaction.response.send_message('You can\'t withdraw from bank without bank account.\nUse `/balance` to create one.', ephemeral=True)
                 return
 
+            taxed_amount = remove_tax(amount=amount, tax_rate=TaxService.get_tax_rate())
+
             if amount > user_data[3]:
                 err_embed = self.create_embed(
                     interaction,
@@ -414,7 +418,7 @@ class Economy(commands.Cog):
                 )
                 await interaction.response.send_message(embed=err_embed)
             else:
-                new_wallet_balance = user_data[2] + amount
+                new_wallet_balance = user_data[2] + taxed_amount
                 new_bank_balance = user_data[3] - amount
                 self.update_user(user_id, new_wallet_balance, new_bank_balance)
                 wd_embed = self.create_embed(
@@ -422,7 +426,8 @@ class Economy(commands.Cog):
                     title='Successful Withdrawal ✅',
                     description=(
                         f'Your {Constants.WALLET}: {new_wallet_balance} {Constants.COIN}\n\n'
-                        f'Your {Constants.BANK}: {new_bank_balance} {Constants.COIN}'
+                        f'Your {Constants.BANK}: {new_bank_balance} {Constants.COIN}\n\n'
+                        f'```You received {taxed_amount} after taking taxes```'
                     ),
                     color=discord.Color.green()
                 )
@@ -440,6 +445,8 @@ class Economy(commands.Cog):
                 await interaction.response.send_message('You can\'t deposit to bank without bank account.\nUse `/balance` to create one.', ephemeral=True)
                 return
             
+            taxed_amount = remove_tax(amount=amount, tax_rate=TaxService.get_tax_rate())
+
             if amount > user_data[2]:
                 err_embed = self.create_embed(
                     interaction,
@@ -452,14 +459,15 @@ class Economy(commands.Cog):
                 await interaction.response.send_message(embed=err_embed)
             else:
                 new_wallet_balance = user_data[2] - amount
-                new_bank_balance = user_data[3] + amount
+                new_bank_balance = user_data[3] + taxed_amount
                 self.update_user(user_id, new_wallet_balance, new_bank_balance)
                 wd_embed = self.create_embed(
                     interaction,
                     title='Successful Deposit ✅',
                     description=(
                         f'Your {Constants.WALLET}: {new_wallet_balance} {Constants.COIN}\n\n'
-                        f'Your {Constants.BANK}: {new_bank_balance} {Constants.COIN}'
+                        f'Your {Constants.BANK}: {new_bank_balance} {Constants.COIN}\n\n'
+                        f'```Your bank receive {taxed_amount} after taking taxes```'
                     ),
                     color=discord.Color.green()
                 )
@@ -470,39 +478,58 @@ class Economy(commands.Cog):
         if str(interaction.guild) and str(interaction.guild_id) != server:
             logger.info(f"{interaction.user.name} Tried to use {interaction.command.name} in {interaction.guild.id}")
             await self.send_inv_embed(interaction)
-        else:
-            with db_connection() as conn:
-                c = conn.cursor()
-                c.execute("""SELECT id, wallet, bank FROM Users""")
-                users = c.fetchall()
-            
-            leaderboard_embed = discord.Embed(
-                color=discord.Color.green(),
-                timestamp=datetime.now()
-            )
-            leaderboard_embed.set_author(name="📃 Server Balance Leaderboard", icon_url=interaction.guild.icon)
-            leaderboard = []
+            return
+        
+        with DatabaseService.db_connection() as conn:
+            c = conn.cursor()
+            c.execute("""SELECT id, wallet, bank FROM Users""")
+            users = c.fetchall()
+        
+        leaderboard_embed = discord.Embed(
+            color=discord.Color.green(),
+            timestamp=datetime.now()
+        )
+        leaderboard_embed.set_author(name="📃 Server Balance Leaderboard", icon_url=interaction.guild.icon)
+        leaderboard = []
 
-            for user in users:
-                usermention = f'<@{user[0]}>'
-                total_money = user[1] + user[2]
-                member = (usermention, total_money)
-                leaderboard.append(member)
+        for user in users:
+            usermention = f'<@{user[0]}>'
+            total_money = user[1] + user[2]
+            member = (usermention, total_money)
+            leaderboard.append(member)
 
-            sorted_leaderboard = sorted(leaderboard, key=lambda x: x[1], reverse=True)
+        sorted_leaderboard = sorted(leaderboard, key=lambda x: x[1], reverse=True)
 
-            leaderboard_text =""
-            
-            for i, (usermention, total_money) in enumerate(sorted_leaderboard[:10], start=1):
-                leaderboard_text += f'{i}. {usermention} - {total_money} {Constants.COIN}\n'
-            
-            leaderboard_embed.add_field(
-                name='**Top 10 Richest Members**',
-                value=leaderboard_text,
-                inline=False
-            )
-            leaderboard_embed.set_footer(text=f"Used by: {interaction.user.name}", icon_url=interaction.user.display_avatar)
-            await interaction.response.send_message(embed=leaderboard_embed)
+        leaderboard_text =""
+        
+        for i, (usermention, total_money) in enumerate(sorted_leaderboard[:10], start=1):
+            leaderboard_text += f'{i}. {usermention} - {total_money} {Constants.COIN}\n'
+        
+        leaderboard_embed.add_field(
+            name='**Top 10 Richest Members**',
+            value=leaderboard_text,
+            inline=False
+        )
+        leaderboard_embed.set_footer(text=f"Used by: {interaction.user.name}", icon_url=interaction.user.display_avatar)
+        await interaction.response.send_message(embed=leaderboard_embed)
+
+    @app_commands.command(name='gettax', description="Show the current tax rate of the economy system")
+    async def gettax(self, interaction: discord.Interaction) -> None:
+        if str(interaction.guild) and str(interaction.guild_id) != server:
+            logger.info(f"{interaction.user.name} Tried to use {interaction.command.name} in {interaction.guild.id}")
+            await self.send_inv_embed(interaction)
+            return
+        
+        tax_rate = TaxService.get_tax_rate()
+
+        tax_embed = self.create_embed(
+            interaction,
+            title="**Current Tax Rate**",
+            description=f"Tax rate is set at : {tax_rate * 100}%",
+            color=discord.Colour.dark_blue()
+        )
+
+        await interaction.response.send_message(embed=tax_embed)
 
     @app_commands.command(name='settax', description="Change the tax rate of the server")
     @app_commands.checks.has_permissions(administrator=True)
@@ -512,12 +539,14 @@ class Economy(commands.Cog):
             await self.send_inv_embed(interaction)
             return
         
+        old_tax_rate = TaxService.get_tax_rate()
+
         user_id = interaction.user.id
         settax_embed = self.create_embed(
             interaction,
             title="**Setting Tax Rate**",
             description=(
-                f"Are you sure you want to change tax from {Economy.tax_rate} to {tax_rate} ?\n\n"
+                f"Are you sure you want to change tax from {old_tax_rate} to {tax_rate} ?\n\n"
                 f"This will affect all server's economy system, Press confirm to procced or Cancel to abort\n\n"
                 f"```This message will be deleted after 5 mins if no action taken.```"
             ),
@@ -545,15 +574,15 @@ class Economy(commands.Cog):
             if interaction.user.id != user_id:
                 await interaction.response.send_message("You are not the command user!", ephemeral=True)
                 return
-
+            
             confirm_embed = self.create_embed(
                 interaction,
                 title="**Setting Tax Rate**",
-                description=f"Tax rate has changed from {Economy.tax_rate} to {tax_rate}",
+                description=f"Tax rate has changed from {old_tax_rate} to {tax_rate}",
                 color=discord.Colour.green()
             )
             
-            Economy.tax_rate = tax_rate
+            TaxService.update_new_tax_rate(tax_rate)
 
             logger.info(f"{interaction.user.name} Changed the tax rate to {tax_rate}")
             await interaction.response.edit_message(embed=confirm_embed, view=None, delete_after=1.5)

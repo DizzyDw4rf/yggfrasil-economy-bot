@@ -3,6 +3,7 @@ venv/
 .idea/
 logs/
 .env
-config
-economy
-main_bank
+config.py
+economy.db
+tax.json
+jackbot.json

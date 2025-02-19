@@ -13,6 +13,7 @@ class Constants():
     Coin_TAILS -> `<:Coin_Tails:1340802182705840149>`
     WORK_REPLIES -> A list of possible work replies 
     CRIME_REPLIES -> A list of possible crime replies
+    SLOT_TEERS -> Icons of slot machine game
     """
 
     BANK = '**Bank 🏛**'
@@ -105,4 +106,29 @@ class Constants():
         "You\'ve eaten all the chips and left the empty bag in the pantry",
         "You\'ve secretly set all the clocks in the house an hour forward",
         "You\'ve taped a \'kick me\' sign to someone\'s back without them noticing",
+    ]
+
+    SLOT_EMOJI = "<:Slot_machine:1341826020902310070>"
+
+    SLOT_TEERS= [
+        "<:slot1:1341814840976736370>",
+        "<:slot2:1341814864246472745>",
+        "<:slot3:1341814881258700902>",
+        "<:slot4:1341814899017515068>",
+        "<:slot5:1341814918919491605>",
+        "<:slot6:1341814938494046311>",
+        "<:slot7:1341814959562035200>",
+        "<:slot8:1341814981405966418>",
+        "<:slot9:1341815007381557339>",
+        "<:slot10:1341815028998864937>",
+        "<:slot11:1341815052524716264>",
+        "<:slot12:1341815082103078912>",
+        "<:slot13:1341815106979496016>",
+        "<:slot14:1341815138218541157>",
+        "<:slot15:1341815167754698793>",
+        "<:slot16:1341815192790630420>",
+        "<:slot17:1341815225204211773>",
+        "<:slot18:1341815244191694848>",
+        "<:slot19:1341815264660029450>",
+        "<:slot20:1341815291226882119>",
     ]

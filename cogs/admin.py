@@ -7,7 +7,7 @@ from discord import ButtonStyle
 from discord.ui import View, Button
 from datetime import datetime
 from src.bot_status import BotStatus
-from src.databases import db_connection
+from src.services.databases import DatabaseService
 
 
 config.dictConfig(config.LOGGING_CONFIG)
@@ -33,13 +33,13 @@ class Admin(commands.Cog):
         await interaction.response.send_message(embed=inv_embed)
     
     def get_user_data(self, user_id: int):
-        with db_connection() as conn:
+        with DatabaseService.db_connection() as conn:
             c = conn.cursor()
             c.execute("""SELECT * FROM Users WHERE id = ?""", (user_id,))
             return c.fetchone()
 
     def update_user(self, user_id: int, wallet: int, bank: int) -> None:
-        with db_connection() as conn:
+        with DatabaseService.db_connection() as conn:
             c = conn.cursor()
             c.execute("""UPDATE Users SET wallet = ?, bank = ? WHERE id = ?""", (wallet, bank, user_id))
             conn.commit()
@@ -87,9 +87,9 @@ class Admin(commands.Cog):
                 await interaction.response.send_message("You are not the command user!", ephemeral=True)
                 return
             
-            with db_connection() as conn:
+            with DatabaseService.db_connection() as conn:
                 c = conn.cursor()
-                c.execute("""UPDATE Users SET wallet = 500, bank = 500""")
+                c.execute("""DELETE FROM Users""")
                 c.execute("""DELETE FROM Transactions""")
                 c.execute("""DELETE FROM sqlite_sequence WHERE name = 'Transactions'""")
                 conn.commit()
