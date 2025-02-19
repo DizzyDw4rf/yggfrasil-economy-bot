@@ -1,7 +1,7 @@
 from datetime import datetime
 
 
-def formatted_time(time) -> str:
+def formatted_time(time: str) -> str:
     dt = datetime.fromisoformat(time)
     formatted_dt = dt.strftime("%B %d, %Y at %I:%M %p")
     return formatted_dt

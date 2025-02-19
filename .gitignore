@@ -1,6 +1,8 @@
 __pycache__/
 venv/
 .idea/
+logs/
 .env
-economy.db
-main_bank.json
+config
+economy
+main_bank

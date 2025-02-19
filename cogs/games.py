@@ -1,4 +1,6 @@
 import discord
+import logging
+import config
 from discord import app_commands
 from discord.ext import commands
 from random import choice, randint
@@ -6,6 +8,9 @@ from src.bot_status import BotStatus
 from src.utils.constants import Constants
 from src.databases import db_connection 
 
+
+config.dictConfig(config.LOGGING_CONFIG)
+logger = logging.getLogger("discord")
 
 BotStatus.set_debug(False)
 server = BotStatus.get_server()
@@ -57,55 +62,49 @@ class Games(commands.Cog):
 
     @app_commands.choices(
             face = [
-                app_commands.Choice(name='Heads', value=Constants.COIN_HEAD),
-                app_commands.Choice(name='Tails', value=Constants.COIN_TAILS)
+                app_commands.Choice(name=f'Heads', value=Constants.COIN_HEAD),
+                app_commands.Choice(name=f'Tails', value=Constants.COIN_TAILS)
             ]
     )
     @app_commands.command(name='coinflip', description="Gamble amount of credit from your wallet with a coin")
-    async def coinflip(self, interaction: discord.Interaction, face: app_commands.Choice[str], amount: int = 100) -> None:
+    async def coinflip(self, interaction: discord.Interaction, face: app_commands.Choice[str], amount: app_commands.Range[int, 10]) -> None:
         if str(interaction.guild) and str(interaction.guild_id) != server:
+            logger.info(f"{interaction.user.name} Tried to use {interaction.command.name} in {interaction.guild.id}")
             await self.send_inv_embed(interaction)
             return
 
         user_id = interaction.user.id
         user_data = self.get_user_data(user_id)
 
-        amount = abs(amount)
-
         if user_data is None:
             await self.send_error_embed(interaction, title="User Not Found In Bank Database")
             return
 
-        if amount > user_data[2] or amount == 0:
-            await self.send_error_embed(interaction, title="Invalid Amount")
+        if amount > user_data[2]:
+            await self.send_error_embed(interaction, title="You don't have Enough credits in your wallet")
             return
         
-        choices = [Constants.COIN_HEAD, Constants.COIN_TAILS]
+        choices = [f"Heads {Constants.COIN_HEAD} ", f"Tails {Constants.COIN_TAILS}"]
         probability = choice(choices)
 
         if face.value == probability:
             new_wallet_balance = user_data[2] + amount
-            self.update_user_wallet(user_id, new_wallet_balance)
-            win_embed = self.create_embed(
-                interaction,
-                description=f"Your coin landed on {probability} You win {amount} {Constants.COIN}",
-                color=discord.Color.yellow()
-            )
-            await interaction.response.send_message(embed=win_embed)
+            description=f"Your coin landed on {probability} You win {amount} {Constants.COIN}"
+            color=discord.Color.yellow()
         else:
             new_wallet_balance = user_data[2] - amount
-            self.update_user_wallet(user_id, new_wallet_balance)
-            lose_embed = self.create_embed(
-                interaction,
-                description=f"Your coin landed on {probability} You lost {amount} {Constants.COIN}",
-                color=discord.Color.dark_red()
-            )
-            await interaction.response.send_message(embed=lose_embed)
+            description=f"Your coin landed on {probability} You lost {amount} {Constants.COIN}"
+            color=discord.Color.dark_red()
+        
+        self.update_user_wallet(user_id, new_wallet_balance) # Updating user wallet
+        cf_embed = self.create_embed(interaction, description=description, color=color)
+        await interaction.response.send_message(embed=cf_embed)
 
     @app_commands.command(name='work', description="Do a work and get paid with credit")
     @app_commands.checks.cooldown(1, 1800, key=lambda i: i.user.id)
     async def work(self, interaction: discord.Interaction) -> None:
         if str(interaction.guild) and str(interaction.guild_id) != server:
+            logger.info(f"{interaction.user.name} Tried to use {interaction.command.name} in {interaction.guild.id}")
             await self.send_inv_embed(interaction)
             return
 
@@ -146,6 +145,7 @@ class Games(commands.Cog):
     @app_commands.checks.cooldown(1, 3600, key=lambda i: i.user.id)
     async def crime(self, interaction: discord.Interaction) -> None:
         if str(interaction.guild) and str(interaction.guild_id) != server:
+            logger.info(f"{interaction.user.name} Tried to use {interaction.command.name} in {interaction.guild.id}")
             await self.send_inv_embed(interaction)
             return
         
@@ -196,6 +196,7 @@ class Games(commands.Cog):
     @app_commands.checks.cooldown(1, 14400, key=lambda i : i.user.id)
     async def rob(self, interaction: discord.Interaction, member: discord.Member) -> None:
         if str(interaction.guild) and str(interaction.guild_id) != server:
+            logger.info(f"{interaction.user.name} Tried to use {interaction.command.name} in {interaction.guild.id}")
             await self.send_inv_embed(interaction)
             return
         
@@ -231,6 +232,7 @@ class Games(commands.Cog):
                 new_member_wallet_bal = user_data[2] + member_data[2]
                 new_user_wallet_bal = 0
                 description=f"{interaction.user.mention} tried to rob {member.mention} and failed\n{member.mention} took all money in {interaction.user.mention} wallet"
+                color=discord.Color.dark_red()
             else:    
                 new_member_wallet_bal = member_data[2] + rob_quantity
                 new_user_wallet_bal = user_data[2] - rob_quantity
@@ -246,13 +248,14 @@ class Games(commands.Cog):
     async def rob_error(self, interaction: discord.Interaction, error) -> None:
         if isinstance(error, app_commands.CommandOnCooldown):
             remaining_time = round(error.retry_after, 2) # Remaining time in seconds
-            hours = remaining_time // 14400
-            minutes = (remaining_time % 14400) // 60
+            hours = remaining_time // 3600
+            minutes = (remaining_time % 3600) // 60
             cd_embed = discord.Embed(
                 title="**⏰ You are in timeout!**",
-                description=f"You can't rob again before `{int(hours)}` hours and `{minutes}` minutes"
+                description=f"You can't rob again before `{int(hours)}` hours and `{minutes}` minutes",
+                color=discord.Color.dark_red()
             )
-            await interaction.response.send_message(embed=cd_embed)
+            await interaction.response.send_message(embed=cd_embed, ephemeral=True)
 
 
 async def setup(client):
