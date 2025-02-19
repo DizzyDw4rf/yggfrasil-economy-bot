@@ -17,9 +17,9 @@ class Constants():
 
     BANK = '**Bank 🏛**'
     WALLET = '**Wallet 💰**'
-    COIN = '<:Coin_Tails:1340802182705840149>' # Used as Main Currency view ex: **Wallet 💰** : 50 🌳
-    COIN_HEAD = '<:Coin_Heads:1340802116565995652>'
-    COIN_TAILS = '<:Coin_Tails:1340802182705840149>'
+    COIN = '<:Coin_Tails:1341570864507785366>' # Used as Main Currency view ex: **Wallet 💰** : 50 🌳
+    COIN_HEAD = '<:Coin_Heads:1341570827660820561>'
+    COIN_TAILS = '<:Coin_Tails:1341570864507785366>'
 
     WORK_REPLIES = [
         "You have collected eggs",

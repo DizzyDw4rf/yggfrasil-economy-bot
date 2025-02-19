@@ -128,7 +128,7 @@ class Games(commands.Cog):
             color=discord.Color.dark_orange()
         )
         await interaction.response.send_message(embed=work_embed)
-    
+
     @work.error
     async def work_error(self, interaction: discord.Interaction, error) -> None:
         if isinstance(error, app_commands.CommandOnCooldown):
@@ -214,7 +214,7 @@ class Games(commands.Cog):
             return
         
         rob_quantity = randint(200, 1000)
-        rob_success_prob = randint(1, 5) # Setting 1/5 prob
+        rob_success_prob = randint(1, 3) # Setting 1/3 prob
 
         if rob_success_prob == 3:
             if rob_quantity >= member_data[2]: # If robbed money >= member money in the wallet give all to the robber and set wallet of robbed to 0
@@ -231,12 +231,12 @@ class Games(commands.Cog):
             if rob_quantity >= user_data[2]: # If robbed money >= user money in the wallet set user wallet to 0 and give member all money
                 new_member_wallet_bal = user_data[2] + member_data[2]
                 new_user_wallet_bal = 0
-                description=f"{interaction.user.mention} tried to rob {member.mention} and failed\n{member.mention} took all money in {interaction.user.mention} wallet"
+                description=f"{interaction.user.mention} tried to rob {member.mention} and failed\n\n{member.mention} took all money in {interaction.user.mention} wallet"
                 color=discord.Color.dark_red()
             else:    
                 new_member_wallet_bal = member_data[2] + rob_quantity
                 new_user_wallet_bal = user_data[2] - rob_quantity
-                description=f"{interaction.user.mention} tried to rob {member.mention} and failed\n{member.mention} got {rob_quantity} {Constants.COIN} added to his wallet"
+                description=f"{interaction.user.mention} tried to rob {member.mention} and failed\n\n{member.mention} got {rob_quantity} {Constants.COIN} added to his wallet"
                 color=discord.Color.dark_red()
         
         self.update_user_wallet(member_id, new_member_wallet_bal) # updating memebr wallet 

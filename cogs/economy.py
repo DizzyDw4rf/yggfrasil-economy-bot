@@ -320,11 +320,12 @@ class Economy(commands.Cog):
                 interaction,
                 title='**Transaction verification**',
                 description=(
-                    f'Are you sure you want to send {amount} {Constants.COIN} to {member.display_name}?'
+                    f'Are you sure you want to send {amount} {Constants.COIN} to {member.display_name}?\n\n'
+                    f"```This message will be deleted after 5 mins if no action taken.```"
                 ),
                 color=discord.Color.blurple()
             )
-            await interaction.response.send_message(embed=verify_embed, view=transaction_view)
+            await interaction.response.send_message(embed=verify_embed, view=transaction_view, delete_after=300)
 
         async def send_btn_callback(interaction: discord.Interaction) -> None:
             if interaction.user.id == int(user_id):
@@ -383,7 +384,7 @@ class Economy(commands.Cog):
                     description=f'{interaction.user.display_name} Canceld the transaction to {member.display_name}',
                     color=discord.Color.dark_red()
                 )
-                await interaction.response.edit_message(embed=cancel_embed, view=None)
+                await interaction.response.edit_message(embed=cancel_embed, view=None, delete_after=1.5)
             else:
                 await interaction.response.send_message('You can\'t make a decison', ephemeral=True)
         
