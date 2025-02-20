@@ -1,3 +1,5 @@
+from src.services.tax import TaxService
+from src.services.slot_machine import SlotMachineService
 
 
 class Constants():
@@ -6,6 +8,7 @@ class Constants():
     Handles the constant variables in embeds -> Bank, wallet, Coin
 
     :Attributes: 
+
     BANK -> `**Bank 🏛**`
     WALLET -> `**Wallet 💰**`
     COIN-> `Main Coin <:Coin_Tails:1340802182705840149>`
@@ -13,15 +16,20 @@ class Constants():
     Coin_TAILS -> `<:Coin_Tails:1340802182705840149>`
     WORK_REPLIES -> A list of possible work replies 
     CRIME_REPLIES -> A list of possible crime replies
+    SLOT_EMOJI -> The emoji of spin button in game jackbot
     SLOT_TEERS -> Icons of slot machine game
     """
 
+    BOT_STATUS = ["/help", f"/jackbot", f"https://tiktok.com/@yggdrasil0707/"]
+
+    # Economy constants
     BANK = '**Bank 🏛**'
     WALLET = '**Wallet 💰**'
     COIN = '<:Coin_Tails:1341570864507785366>' # Used as Main Currency view ex: **Wallet 💰** : 50 🌳
     COIN_HEAD = '<:Coin_Heads:1341570827660820561>'
     COIN_TAILS = '<:Coin_Tails:1341570864507785366>'
 
+    # Activity replies
     WORK_REPLIES = [
         "You have collected eggs",
         "You have chopped wood",
@@ -108,8 +116,8 @@ class Constants():
         "You\'ve taped a \'kick me\' sign to someone\'s back without them noticing",
     ]
 
+    # Jacbot emojies
     SLOT_EMOJI = "<:Slot_machine:1341826020902310070>"
-
     SLOT_TEERS= [
         "<:slot1:1341814840976736370>",
         "<:slot2:1341814864246472745>",
@@ -132,3 +140,11 @@ class Constants():
         "<:slot19:1341815264660029450>",
         "<:slot20:1341815291226882119>",
     ]
+
+    SHOP = {
+        "5000 - 5K": ["Get the 5k role and gain 1% of the money in your bank as income", 5000, 0.01],
+        "50000 - 50K": ["Get the 50k role and gain 2% of the money in your bank as income", 50000, 0.02],
+        "100000 - 100K": ["Get the 100K role and gain 5% of the money in your bank as income", 10000, 0.05],
+        "500000 - 500K": ["Get the 500k role and gain 7% of the money in your bank as income", 50000, 0.07],
+        "1000000 - 1M": ["Get the 1M role and gain 15% of the money in your bank as income", 100000, 0.15],
+    }

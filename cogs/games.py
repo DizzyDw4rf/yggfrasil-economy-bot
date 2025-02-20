@@ -9,6 +9,7 @@ from discord.ext import commands
 from random import choice, randint
 from src.bot_status import BotStatus
 from src.utils.constants import Constants
+from src.services.embeds import EmbedService
 from src.services.databases import DatabaseService
 from src.services.slot_machine import SlotMachineService
 
@@ -23,34 +24,6 @@ class Games(commands.Cog):
     
     def __init__(self, client):
         self.client = client
-
-    async def send_inv_embed(self, interaction: discord.Interaction) -> discord.Embed:
-        inv_embed = discord.Embed(
-            title='Join our server',
-            description=(
-            f'You can Use the bot here: '
-            f'[𝐘𝐆𝐆𝐃𝐑𝐀𝐒𝐈𝐋🌳](https://discord.gg/KDuf8kvJf4)'
-            ),
-            color=discord.Color.dark_green()
-        )
-        await interaction.response.send_message(embed=inv_embed)
-    
-    def create_embed(self, interaction: discord.Interaction, description: str, color: discord.Colour) -> discord.Embed:
-        username = interaction.user.name
-        icon = interaction.user.display_avatar
-        em = discord.Embed(
-            description=description,
-            color=color
-        )
-        em.set_author(name=f"{username}", icon_url=icon)
-        return em
-
-    async def send_error_embed(self, interaction: discord.Interaction, title: str) -> discord.Embed:
-        err_embed = discord.Embed(
-            title=title,
-            colour=discord.Colour.red()
-        )
-        await interaction.response.send_message(embed=err_embed, ephemeral=True)
 
     def get_user_data(self, user_id: int):
         with DatabaseService.db_connection() as conn:
@@ -74,18 +47,18 @@ class Games(commands.Cog):
     async def coinflip(self, interaction: discord.Interaction, face: app_commands.Choice[str], amount: app_commands.Range[int, 10]) -> None:
         if str(interaction.guild) and str(interaction.guild_id) != server:
             logger.info(f"{interaction.user.name} Tried to use {interaction.command.name} in {interaction.guild.id}")
-            await self.send_inv_embed(interaction)
+            await EmbedService.send_inv_embed(interaction)
             return
 
         user_id = interaction.user.id
         user_data = self.get_user_data(user_id)
 
         if user_data is None:
-            await self.send_error_embed(interaction, title="User Not Found In Bank Database")
+            await EmbedService.send_error_embed(interaction, title="User Not Found In Bank Database")
             return
 
         if amount > user_data[2]:
-            await self.send_error_embed(interaction, title="You don't have Enough credits in your wallet")
+            await EmbedService.send_error_embed(interaction, title="You don't have Enough credits in your wallet")
             return
         
         choices = [f"Heads {Constants.COIN_HEAD} ", f"Tails {Constants.COIN_TAILS}"]
@@ -101,7 +74,7 @@ class Games(commands.Cog):
             color=discord.Color.dark_red()
         
         self.update_user_wallet(user_id, new_wallet_balance) # Updating user wallet
-        cf_embed = self.create_embed(interaction, description=description, color=color)
+        cf_embed = EmbedService.create_embed(interaction, description=description, color=color)
         await interaction.response.send_message(embed=cf_embed)
 
     @app_commands.command(name='work', description="Do a work and get paid with credit")
@@ -109,14 +82,14 @@ class Games(commands.Cog):
     async def work(self, interaction: discord.Interaction) -> None:
         if str(interaction.guild) and str(interaction.guild_id) != server:
             logger.info(f"{interaction.user.name} Tried to use {interaction.command.name} in {interaction.guild.id}")
-            await self.send_inv_embed(interaction)
+            await EmbedService.send_inv_embed(interaction)
             return
 
         user_id = interaction.user.id
         user_data = self.get_user_data(user_id)
 
         if user_data is None:
-            await self.send_error_embed(interaction, title="User Not Found In Bank Database")
+            await EmbedService.send_error_embed(interaction, title="User Not Found In Bank Database")
             return
         
         choices = choice(Constants.WORK_REPLIES) # Getting a random reply
@@ -126,7 +99,7 @@ class Games(commands.Cog):
 
         self.update_user_wallet(user_id, new_wallet_balance) # Updating user wallet
 
-        work_embed = self.create_embed(
+        work_embed = EmbedService.create_embed(
             interaction,
             description=f"{choices} And get Paid with {rand_amt} {Constants.COIN}",
             color=discord.Color.dark_orange()
@@ -150,14 +123,14 @@ class Games(commands.Cog):
     async def crime(self, interaction: discord.Interaction) -> None:
         if str(interaction.guild) and str(interaction.guild_id) != server:
             logger.info(f"{interaction.user.name} Tried to use {interaction.command.name} in {interaction.guild.id}")
-            await self.send_inv_embed(interaction)
+            await EmbedService.send_inv_embed(interaction)
             return
         
         user_id = interaction.user.id
         user_data = self.get_user_data(user_id)
 
         if user_data is None:
-            await self.send_error_embed(interaction, title="User Not Found In Bank Database")
+            await EmbedService.send_error_embed(interaction, title="User Not Found In Bank Database")
             return
         
         choices = choice(Constants.CRIME_REPLIES) # Getting a random crime reply
@@ -181,7 +154,7 @@ class Games(commands.Cog):
             color=discord.Color.yellow()
 
         self.update_user_wallet(user_id, new_wallet_balance) # Updating user wallet
-        crime_embed = self.create_embed(interaction, description=description, color=color)
+        crime_embed = EmbedService.create_embed(interaction, description=description, color=color)
         await interaction.response.send_message(embed=crime_embed)
 
     @crime.error
@@ -201,7 +174,7 @@ class Games(commands.Cog):
     async def rob(self, interaction: discord.Interaction, member: discord.Member) -> None:
         if str(interaction.guild) and str(interaction.guild_id) != server:
             logger.info(f"{interaction.user.name} Tried to use {interaction.command.name} in {interaction.guild.id}")
-            await self.send_inv_embed(interaction)
+            await EmbedService.send_inv_embed(interaction)
             return
         
         user_id = interaction.user.id
@@ -210,11 +183,11 @@ class Games(commands.Cog):
         member_data = self.get_user_data(member_id)
 
         if user_data is None or member_data is None:
-            await self.send_error_embed(interaction, title="User Or Member choosen not found In Bank Database")
+            await EmbedService.send_error_embed(interaction, title="User Or Member choosen not found In Bank Database")
             return
         
         if user_id == member_id:
-            await self.send_error_embed(interaction, title="You can't rob Yourself\nNow wait `4` hours to use command again!")
+            await EmbedService.send_error_embed(interaction, title="You can't rob Yourself\nNow wait `4` hours to use command again!")
             return
         
         rob_quantity = randint(200, 1000)
@@ -245,7 +218,7 @@ class Games(commands.Cog):
         
         self.update_user_wallet(member_id, new_member_wallet_bal) # updating memebr wallet 
         self.update_user_wallet(user_id, new_user_wallet_bal) # updating user wallet
-        rob_embed = self.create_embed(interaction, description=description, color=color)
+        rob_embed = EmbedService.create_embed(interaction, description=description, color=color)
         await interaction.response.send_message(embed=rob_embed)
 
     @rob.error
@@ -265,7 +238,7 @@ class Games(commands.Cog):
     async def jackbot(self, interaction: discord.Interaction) -> None:
         if str(interaction.guild) and str(interaction.guild_id) != server:
             logger.info(f"{interaction.user.name} Tried to use {interaction.command.name} in {interaction.guild.id}")
-            await self.send_inv_embed(interaction)
+            await EmbedService.send_inv_embed(interaction)
             return
 
         user_id = interaction.user.id
@@ -320,7 +293,7 @@ class Games(commands.Cog):
                 return
             
             if player_data[2] < 300:
-                not_enough = self.create_embed(interaction, description=f"You only have {player_data[2]} {Constants.COIN}, You need 300 {Constants.COIN} to play", color=discord.Color.dark_red())
+                not_enough = EmbedService.create_embed(interaction, description=f"You only have {player_data[2]} {Constants.COIN}, You need 300 {Constants.COIN} to play", color=discord.Color.dark_red())
                 await interaction.response.send_message(embed=not_enough, ephemeral=True)
                 return
             

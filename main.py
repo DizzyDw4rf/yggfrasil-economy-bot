@@ -3,8 +3,10 @@ import os
 import asyncio
 import logging
 import config
-from discord.ext import commands
+from discord.ext import commands,tasks
+
 from dotenv import load_dotenv
+from src.utils.constants import Constants
 from paths import COGS_DIR
 
 
@@ -17,11 +19,29 @@ class MyBot(commands.Bot):
 
     def __init__(self, command_prefix, intents):
         super().__init__(command_prefix=command_prefix, intents=intents)
+        self.activity_name = Constants.BOT_STATUS
+        
+        self.current_activity_index = 0
 
     async def on_ready(self) -> None:
-        await self.tree.sync()
         logger.info(f"User: {self.user} - ID: {self.user.id}")
+        await self.tree.sync()
+        await self.change_activity_name.start()
     
+    @tasks.loop(seconds=5)
+    async def change_activity_name(self):
+        await self.change_presence(
+            status=discord.Status.online,
+            activity=discord.Streaming(
+                name=self.activity_name[self.current_activity_index], 
+                url="https://twitch.tv/yggdrasill707"))
+
+        self.current_activity_index = (self.current_activity_index + 1) % len(self.activity_name)
+    
+    @change_activity_name.before_loop
+    async def before_change_activity_name(self):
+        await self.wait_until_ready()
+
     async def load_cogs(self) -> None:
         for filename in os.listdir(COGS_DIR):
             if filename.endswith('.py') and filename != "__init__.py":

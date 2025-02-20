@@ -7,6 +7,7 @@ from discord import ButtonStyle
 from discord.ui import View, Button
 from datetime import datetime
 from src.bot_status import BotStatus
+from src.services.embeds import EmbedService
 from src.services.databases import DatabaseService
 
 
@@ -20,17 +21,6 @@ class Admin(commands.Cog):
     
     def __init__(self, client):
         self.client = client
-    
-    async def send_inv_embed(self, interaction) -> discord.Embed:
-        inv_embed = discord.Embed(
-            title='Join our server',
-            description=(
-            f'You can Use the bot here: '
-            f'[𝐘𝐆𝐆𝐃𝐑𝐀𝐒𝐈𝐋🌳](https://discord.gg/KDuf8kvJf4)'
-            ),
-            color=discord.Color.dark_green()
-        )
-        await interaction.response.send_message(embed=inv_embed)
     
     def get_user_data(self, user_id: int):
         with DatabaseService.db_connection() as conn:
@@ -49,7 +39,7 @@ class Admin(commands.Cog):
     async def reset_economy(self, interaction: discord.Interaction) -> None:
         if str(interaction.guild) and str(interaction.guild_id) != server:
             logger.info(f"{interaction.user.name} Tried to use {interaction.command.name} in {interaction.guild.id}")
-            await self.send_inv_embed(interaction)
+            await EmbedService.send_inv_embed(interaction)
             return
 
         user_id = interaction.user.id
@@ -137,7 +127,7 @@ class Admin(commands.Cog):
     async def reset_user(self, interaction: discord.Interaction, member: discord.Member) -> None:
         if str(interaction.guild) and str(interaction.guild_id) != server:
             logger.info(f"{interaction.user.name} Tried to use {interaction.command.name} in {interaction.guild.id}")
-            await self.send_inv_embed(interaction)
+            await EmbedService.send_inv_embed(interaction)
             return
         
         user_id = interaction.user.id

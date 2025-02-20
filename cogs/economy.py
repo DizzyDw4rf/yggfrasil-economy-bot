@@ -1,6 +1,7 @@
 import discord
 import config
 import logging
+import math
 from discord import app_commands
 from discord.ext import commands
 from discord import ButtonStyle
@@ -10,6 +11,7 @@ from datetime import datetime
 from src.bot_status import BotStatus
 from src.utils.tools import formatted_time, remove_tax
 from src.utils.constants import Constants
+from src.services.embeds import EmbedService
 from src.services.databases import DatabaseService
 from src.services.tax import TaxService
 
@@ -29,32 +31,6 @@ class Economy(commands.Cog):
     
     def __init__(self, client):
         self.client = client
-
-    async def send_inv_embed(self, interaction) -> discord.Embed:
-        inv_embed = discord.Embed(
-            title='Join our server',
-            description=(
-            f'You can Use the bot here: '
-            f'[𝐘𝐆𝐆𝐃𝐑𝐀𝐒𝐈𝐋🌳](https://discord.gg/KDuf8kvJf4)'
-            ),
-            color=discord.Color.dark_green()
-        )
-        await interaction.response.send_message(embed=inv_embed)
-    
-    def create_embed(self,interaction: discord.Interaction, title: str, description: str, color: discord.Colour) -> discord.Embed:
-        """
-        This function create an Embed message with footer showing date and user name and icon
-        """
-        user = interaction.user.name
-        icon = interaction.user.display_avatar
-        em = discord.Embed(
-            title=title,
-            description=description,
-            color=color,
-            timestamp=datetime.now()
-        )
-        em.set_footer(text=f'Used by: {user}', icon_url=icon)
-        return em
     
     def get_user_data(self, user_id: int):
         with DatabaseService.db_connection() as conn:
@@ -94,7 +70,7 @@ class Economy(commands.Cog):
     async def balance(self, interaction : discord.Interaction, member: discord.Member = None) -> None:
         if str(interaction.guild) and str(interaction.guild_id) != server:
             logger.info(f"{interaction.user.name} Tried to use {interaction.command.name} in {interaction.guild.id}")
-            await self.send_inv_embed(interaction)
+            await EmbedService.send_inv_embed(interaction)
             return
         
         user_id = interaction.user.id
@@ -132,7 +108,7 @@ class Economy(commands.Cog):
             )
             color=discord.Colour.green()
             
-        bal_embed = self.create_embed(interaction, title=title, description=description, color=color)
+        bal_embed = EmbedService.create_embed(interaction, title=title, description=description, color=color)
         await interaction.response.send_message(embed=bal_embed)
 
     @app_commands.describe(member='A member exists in the guild', amount='The positive number you will to give to user')
@@ -141,7 +117,7 @@ class Economy(commands.Cog):
     async def add(self, interaction: discord.Interaction, member: discord.Member, amount: app_commands.Range[int, 1]) -> None:
         if str(interaction.guild) and str(interaction.guild_id) != server:
             logger.info(f"{interaction.user.name} Tried to use {interaction.command.name} in {interaction.guild.id}")
-            await self.send_inv_embed(interaction)
+            await EmbedService.send_inv_embed(interaction)
         else:
             member_id = member.id
             member_data = self.get_user_data(member_id)
@@ -152,7 +128,7 @@ class Economy(commands.Cog):
             # check if amount is valid then add it to bank
             new_bank_balance = member_data[3] + abs(amount)
             self.update_user(member_id, member_data[2], new_bank_balance)
-            added_embed = self.create_embed(
+            added_embed = EmbedService.create_embed(
                 interaction,
                 title=f'{member.display_name} Has been rewareded with {amount} {Constants.COIN}',
                 description=f'His {Constants.BANK}:  {new_bank_balance} {Constants.COIN}',
@@ -176,7 +152,7 @@ class Economy(commands.Cog):
     async def remove(self, interaction: discord.Interaction, member: discord.Member, amount: app_commands.Range[int, 1]) -> None:
         if str(interaction.guild) and str(interaction.guild_id) != server:
             logger.info(f"{interaction.user.name} Tried to use {interaction.command.name} in {interaction.guild.id}")
-            await self.send_inv_embed(interaction)
+            await EmbedService.send_inv_embed(interaction)
         else:
             member_id = member.id
             member_data = self.get_user_data(member_id)
@@ -191,7 +167,7 @@ class Economy(commands.Cog):
                 if amount <= bank: # Remove from bank if possible
                     new_bank_balance = bank - amount
                     self.update_user(member_id, wallet, new_bank_balance)
-                    rmv_embed = self.create_embed(
+                    rmv_embed = EmbedService.create_embed(
                         interaction,
                         title=f'{member.display_name} has been punished',
                         description=(
@@ -203,7 +179,7 @@ class Economy(commands.Cog):
                 else: # Take all from bank and remaining from wallet
                     new_wallet_balance = wallet - (amount - bank)
                     self.update_user(member_id, new_wallet_balance, 0)
-                    rmv_embed = self.create_embed(
+                    rmv_embed = EmbedService.create_embed(
                         interaction,
                         title=f'{member.display_name} has been punished',
                         description=(
@@ -216,7 +192,7 @@ class Economy(commands.Cog):
             else: # amount > total balance
                 # Remove all in bank and wallet
                 self.update_user(member_id, 0, 0)
-                rmv_embed = self.create_embed(
+                rmv_embed = EmbedService.create_embed(
                     interaction,
                         title=f'{member.display_name} has been punished',
                         description=(
@@ -242,7 +218,7 @@ class Economy(commands.Cog):
     async def daily(self, interaction: discord.Interaction) -> None:
         if str(interaction.guild) and str(interaction.guild_id) != server:
             logger.info(f"{interaction.user.name} Tried to use {interaction.command.name} in {interaction.guild.id}")
-            await self.send_inv_embed(interaction)
+            await EmbedService.send_inv_embed(interaction)
         else:
             user_id = interaction.user.id
             user_data = self.get_user_data(user_id)
@@ -254,7 +230,7 @@ class Economy(commands.Cog):
             username, wallet , bank = user_data[1], user_data[2], user_data[3]
             new_bank_balance = bank + rand_amount
             self.update_user(user_id, wallet, new_bank_balance)
-            daily_embed = self.create_embed(
+            daily_embed = EmbedService.create_embed(
                 interaction,
                 title=f'{username} Got a reward.',
                 description=(
@@ -286,7 +262,7 @@ class Economy(commands.Cog):
     async def send(self, interaction: discord.Interaction, member: discord.Member, amount: app_commands.Range[int, 100]) -> None:
         if str(interaction.guild) and str(interaction.guild_id) != server:
             logger.info(f"{interaction.user.name} Tried to use {interaction.command.name} in {interaction.guild.id}")
-            await self.send_inv_embed(interaction)
+            await EmbedService.send_inv_embed(interaction)
             return
         
         user_id = interaction.user.id
@@ -317,7 +293,7 @@ class Economy(commands.Cog):
         transaction_view = View()
         transaction_view.add_item(send_btn)
         transaction_view.add_item(cancel_send_btn)
-        verify_embed = self.create_embed(
+        verify_embed = EmbedService.create_embed(
             interaction,
             title='**Transaction verification**',
             description=(
@@ -331,7 +307,7 @@ class Economy(commands.Cog):
         async def send_btn_callback(interaction: discord.Interaction) -> None:
             if interaction.user.id == int(user_id):
                 if amount > user_data[3]:
-                    not_enough = self.create_embed(
+                    not_enough = EmbedService.create_embed(
                         interaction,
                         title=f'You tried to send {amount} {Constants.COIN}',
                         description=f'Your {Constants.BANK}: {user_data[3]}',
@@ -364,7 +340,7 @@ class Economy(commands.Cog):
                         )
                         conn.commit()
 
-                    trans_done = self.create_embed(
+                    trans_done = EmbedService.create_embed(
                         interaction,
                         title='**Transaction Completed 🚀**',
                         description=(
@@ -380,7 +356,7 @@ class Economy(commands.Cog):
         
         async def cancel_btn_callback(interaction: discord.Interaction) -> None:
             if interaction.user.id == int(user_id):
-                cancel_embed = self.create_embed(
+                cancel_embed = EmbedService.create_embed(
                     interaction,
                     title='Transaction Canceld ❌',
                     description=f'{interaction.user.display_name} Canceld the transaction to {member.display_name}',
@@ -397,7 +373,7 @@ class Economy(commands.Cog):
     async def withdraw(self, interaction: discord.Interaction, amount: app_commands.Range[int, 1]) -> None:
         if str(interaction.guild) and str(interaction.guild_id) != server:
             logger.info(f"{interaction.user.name} Tried to use {interaction.command.name} in {interaction.guild.id}")
-            await self.send_inv_embed(interaction)
+            await EmbedService.send_inv_embed(interaction)
         else:
             user_id = interaction.user.id
             user_data = self.get_user_data(user_id)
@@ -408,7 +384,7 @@ class Economy(commands.Cog):
             taxed_amount = remove_tax(amount=amount, tax_rate=TaxService.get_tax_rate())
 
             if amount > user_data[3]:
-                err_embed = self.create_embed(
+                err_embed = EmbedService.create_embed(
                     interaction,
                     title='Invalid credit Withdraw',
                     description=(
@@ -421,7 +397,7 @@ class Economy(commands.Cog):
                 new_wallet_balance = user_data[2] + taxed_amount
                 new_bank_balance = user_data[3] - amount
                 self.update_user(user_id, new_wallet_balance, new_bank_balance)
-                wd_embed = self.create_embed(
+                wd_embed = EmbedService.create_embed(
                     interaction,
                     title='Successful Withdrawal ✅',
                     description=(
@@ -437,7 +413,7 @@ class Economy(commands.Cog):
     async def deposit(self, interaction: discord.Interaction, amount: app_commands.Range[int, 1]) -> None:
         if str(interaction.guild) and str(interaction.guild_id) != server:
             logger.info(f"{interaction.user.name} Tried to use {interaction.command.name} in {interaction.guild.id}")
-            await self.send_inv_embed(interaction)
+            await EmbedService.send_inv_embed(interaction)
         else:
             user_id = interaction.user.id
             user_data = self.get_user_data(user_id)
@@ -448,7 +424,7 @@ class Economy(commands.Cog):
             taxed_amount = remove_tax(amount=amount, tax_rate=TaxService.get_tax_rate())
 
             if amount > user_data[2]:
-                err_embed = self.create_embed(
+                err_embed = EmbedService.create_embed(
                     interaction,
                     title='Invalid credit Deposit',
                     description=(
@@ -461,7 +437,7 @@ class Economy(commands.Cog):
                 new_wallet_balance = user_data[2] - amount
                 new_bank_balance = user_data[3] + taxed_amount
                 self.update_user(user_id, new_wallet_balance, new_bank_balance)
-                wd_embed = self.create_embed(
+                wd_embed = EmbedService.create_embed(
                     interaction,
                     title='Successful Deposit ✅',
                     description=(
@@ -477,7 +453,7 @@ class Economy(commands.Cog):
     async def leaderboard(self, interaction: discord.Interaction) -> None:
         if str(interaction.guild) and str(interaction.guild_id) != server:
             logger.info(f"{interaction.user.name} Tried to use {interaction.command.name} in {interaction.guild.id}")
-            await self.send_inv_embed(interaction)
+            await EmbedService.send_inv_embed(interaction)
             return
         
         with DatabaseService.db_connection() as conn:
@@ -517,12 +493,12 @@ class Economy(commands.Cog):
     async def gettax(self, interaction: discord.Interaction) -> None:
         if str(interaction.guild) and str(interaction.guild_id) != server:
             logger.info(f"{interaction.user.name} Tried to use {interaction.command.name} in {interaction.guild.id}")
-            await self.send_inv_embed(interaction)
+            await EmbedService.send_inv_embed(interaction)
             return
         
         tax_rate = TaxService.get_tax_rate()
 
-        tax_embed = self.create_embed(
+        tax_embed = EmbedService.create_embed(
             interaction,
             title="**Current Tax Rate**",
             description=f"Tax rate is set at : {tax_rate * 100}%",
@@ -536,13 +512,13 @@ class Economy(commands.Cog):
     async def settax(self, interaction: discord.Interaction, tax_rate: app_commands.Range[float, 0.0, 5.0]) -> None:
         if str(interaction.guild) and str(interaction.guild_id) != server:
             logger.info(f"{interaction.user.name} Tried to use {interaction.command.name} in {interaction.guild.id}")
-            await self.send_inv_embed(interaction)
+            await EmbedService.send_inv_embed(interaction)
             return
         
         old_tax_rate = TaxService.get_tax_rate()
 
         user_id = interaction.user.id
-        settax_embed = self.create_embed(
+        settax_embed = EmbedService.create_embed(
             interaction,
             title="**Setting Tax Rate**",
             description=(
@@ -575,7 +551,7 @@ class Economy(commands.Cog):
                 await interaction.response.send_message("You are not the command user!", ephemeral=True)
                 return
             
-            confirm_embed = self.create_embed(
+            confirm_embed = EmbedService.create_embed(
                 interaction,
                 title="**Setting Tax Rate**",
                 description=f"Tax rate has changed from {old_tax_rate} to {tax_rate}",
@@ -592,7 +568,7 @@ class Economy(commands.Cog):
                 await interaction.response.send_message("You are not the command user!", ephemeral=True)
                 return
 
-            cancel_embed = self.create_embed(
+            cancel_embed = EmbedService.create_embed(
                 interaction,
                 title="**Setting Tax Rate**",
                 description=f"Changing tax rate Canceld.",
@@ -614,6 +590,66 @@ class Economy(commands.Cog):
             )
             logger.error(f"{interaction.user.name} Tried to use /settax command while he not adminstartor")
             await interaction.response.send_message(embed=em, ephemeral=True)
+
+    @app_commands.command(name='collect_income', description="Collect income based on the roles you bought from shop")
+    @app_commands.checks.cooldown(1, 86400, key=lambda i: i.user.id)
+    async def collect_income(self, interaction: discord.Interaction) -> None:
+        if str(interaction.guild) and str(interaction.guild_id) != server:
+            logger.info(f"{interaction.user.name} Tried to use {interaction.command.name} in {interaction.guild.id}")
+            await EmbedService.send_inv_embed(interaction)
+            return
+        
+        guild = interaction.guild
+        user = interaction.user
+        user_id = interaction.user.id
+        user_data = self.get_user_data(user_id)
+
+        # Getting user income roles
+        income_roles = [role.name for role in user.roles if role != guild.default_role and role.name in Constants.SHOP.keys()]
+        
+        if not income_roles:
+            await interaction.response.send_message(f"You don't have any income role, check </shop:1342204166382157997> to buy one", ephemeral=True)
+            return
+        
+        # Calculating total income 
+        total_percentage = [Constants.SHOP[role][2] for role in income_roles]
+        total_income = sum(total_percentage) * user_data[3]
+        new_bank_balance = user_data[3] + math.floor(total_income)
+
+        income_embed = EmbedService.create_embed(
+            interaction,
+            title="**Income Collection**",
+            description=(
+                f"✅ Role income successfully collected!\n\n"
+                f"You have {len(income_roles)} roles with a total of {sum(total_percentage) * 100}% of you current bank\n"
+                f"Your bank incresed by a total of {math.floor(total_income)} {Constants.COIN}\n"
+                f"Your new bank balance: {new_bank_balance} {Constants.COIN}"
+            ),
+            color=discord.Color.orange()
+        )
+        for i, role_name in enumerate(income_roles):
+            role_id = discord.utils.get(guild.roles, name=role_name).id
+            income_embed.add_field(
+                name=f"Role {i + 1}: ",
+                value=f"<@&{role_id}> which give {total_percentage[i] * 100}%",
+                inline=False
+            )
+        
+        self.update_user(user_id, user_data[2], new_bank_balance)
+        await interaction.response.send_message(embed=income_embed)
+
+    @collect_income.error
+    async def collect_income_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
+        if isinstance(error, app_commands.CommandOnCooldown):
+            remaining_time = round(error.retry_after, 2) # getting time in seconds
+            hours = remaining_time // 3600
+            minutes = (remaining_time % 3600) // 60
+            cd_embed = discord.Embed(
+                title='**⏰ You are in timeout!**',
+                description=f'You must wait `{int(hours)}` hours and `{minutes}` minutes before using this command again.',
+                color=discord.Color.dark_red()
+            )
+            await interaction.response.send_message(embed=cd_embed, ephemeral=True)
 
 
 async def setup(client):
