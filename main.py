@@ -58,7 +58,14 @@ class MyBot(commands.Bot):
             await self.start(token)
 
 
-client = MyBot(command_prefix='*', intents=discord.Intents.all())
+intents = discord.Intents.default()
+intents.guilds = True
+intents.members = True
+intents.messages = True
+intents.message_content = True
+
+client = MyBot(command_prefix='*', intents=intents)
+
 
 async def main() -> None:
     await client.start_bot(TOKEN)
