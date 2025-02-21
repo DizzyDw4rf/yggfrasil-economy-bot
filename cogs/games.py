@@ -39,8 +39,8 @@ class Games(commands.Cog):
 
     @app_commands.choices(
             face = [
-                app_commands.Choice(name=f'Heads', value=Constants.COIN_HEAD),
-                app_commands.Choice(name=f'Tails', value=Constants.COIN_TAILS)
+                app_commands.Choice(name=f'Heads', value=f"Heads {Constants.COIN_HEAD}"),
+                app_commands.Choice(name=f'Tails', value=f"Tails {Constants.COIN_TAILS}")
             ]
     )
     @app_commands.command(name='coinflip', description="Gamble amount of credit from your wallet with a coin")
@@ -61,7 +61,7 @@ class Games(commands.Cog):
             await EmbedService.send_error_embed(interaction, title="You don't have Enough credits in your wallet")
             return
         
-        choices = [f"Heads {Constants.COIN_HEAD} ", f"Tails {Constants.COIN_TAILS}"]
+        choices = [f"Heads {Constants.COIN_HEAD}", f"Tails {Constants.COIN_TAILS}"]
         probability = choice(choices)
 
         if face.value == probability:
