@@ -43,7 +43,7 @@ class Shop(commands.Cog):
             interaction,
             title=f"**{interaction.guild.name}'s Shop**",
             description=(
-                f"Buy an item with the /itembuy command.\n"
+                f"Buy an item with the </itembuy:1342204166382157998> command.\n"
             ),
             color=discord.Colour.dark_blue()
         )

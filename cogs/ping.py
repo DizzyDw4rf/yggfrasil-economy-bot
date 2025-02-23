@@ -1,6 +1,7 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
+from datetime import datetime
 
 
 class Ping(commands.Cog):
@@ -14,9 +15,11 @@ class Ping(commands.Cog):
         ping_embed = discord.Embed(
             title="Pong! 🏓",
             description=f"**⌛ Time:** {bot_latency}ms",
-            color=discord.Color.brand_green()
+            color=discord.Color.brand_green(),
+            timestamp=datetime.now()
         )
-        await interaction.response.send_message(embed=ping_embed, ephemeral=True)
+        ping_embed.set_footer(text=f"Requested by :{interaction.user.name}", icon_url=interaction.user.display_avatar)
+        await interaction.response.send_message(embed=ping_embed)
 
 
 async def setup(client):

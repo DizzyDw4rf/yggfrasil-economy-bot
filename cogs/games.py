@@ -43,8 +43,9 @@ class Games(commands.Cog):
                 app_commands.Choice(name=f'Tails', value=f"Tails {Constants.COIN_TAILS}")
             ]
     )
+    @app_commands.describe(amount="Type a positive amount or 'all' to bet everything")
     @app_commands.command(name='coinflip', description="Gamble amount of credit from your wallet with a coin")
-    async def coinflip(self, interaction: discord.Interaction, face: app_commands.Choice[str], amount: app_commands.Range[int, 10]) -> None:
+    async def coinflip(self, interaction: discord.Interaction, face: app_commands.Choice[str], amount: str) -> None:
         if str(interaction.guild) and str(interaction.guild_id) != server:
             logger.info(f"{interaction.user.name} Tried to use {interaction.command.name} in {interaction.guild.id}")
             await EmbedService.send_inv_embed(interaction)
@@ -57,7 +58,20 @@ class Games(commands.Cog):
             await EmbedService.send_error_embed(interaction, title="User Not Found In Bank Database")
             return
 
-        if amount > user_data[2]:
+        if amount.lower() == "all":
+            amount_to_bet = user_data[2]
+        else:
+            try:
+                amount_to_bet = int(amount)
+                if amount_to_bet < 10:
+                    await EmbedService.send_error_embed(interaction, title="The minimum bet is 10 credits")
+                    return
+            except ValueError:
+                await EmbedService.send_error_embed(interaction, title="Please enter a positive amount or 'all' to bet all money in wallet")
+                return
+                
+
+        if amount_to_bet > user_data[2]:
             await EmbedService.send_error_embed(interaction, title="You don't have Enough credits in your wallet")
             return
         
@@ -65,12 +79,12 @@ class Games(commands.Cog):
         probability = choice(choices)
 
         if face.value == probability:
-            new_wallet_balance = user_data[2] + amount
-            description=f"Your coin landed on {probability} You win {amount} {Constants.COIN}"
+            new_wallet_balance = user_data[2] + amount_to_bet
+            description=f"Your coin landed on {probability} You win {amount_to_bet} {Constants.COIN}"
             color=discord.Color.yellow()
         else:
-            new_wallet_balance = user_data[2] - amount
-            description=f"Your coin landed on {probability} You lost {amount} {Constants.COIN}"
+            new_wallet_balance = user_data[2] - amount_to_bet
+            description=f"Your coin landed on {probability} You lost {amount_to_bet} {Constants.COIN}"
             color=discord.Color.dark_red()
         
         self.update_user_wallet(user_id, new_wallet_balance) # Updating user wallet
@@ -93,7 +107,7 @@ class Games(commands.Cog):
             return
         
         choices = choice(Constants.WORK_REPLIES) # Getting a random reply
-        rand_amt = randint(70, 250) # Getting a random payment to update wallet with
+        rand_amt = randint(100, 270) # Getting a random payment to update wallet with
 
         new_wallet_balance = user_data[2] + rand_amt
 
@@ -119,7 +133,7 @@ class Games(commands.Cog):
             await interaction.response.send_message(embed=cd_embed, ephemeral=True)
 
     @app_commands.command(name='crime', description="Commit A crime to get credit but if you got caught you will pay fine")
-    @app_commands.checks.cooldown(1, 3600, key=lambda i: i.user.id)
+    @app_commands.checks.cooldown(1, 10800, key=lambda i: i.user.id)
     async def crime(self, interaction: discord.Interaction) -> None:
         if str(interaction.guild) and str(interaction.guild_id) != server:
             logger.info(f"{interaction.user.name} Tried to use {interaction.command.name} in {interaction.guild.id}")
@@ -133,25 +147,11 @@ class Games(commands.Cog):
             await EmbedService.send_error_embed(interaction, title="User Not Found In Bank Database")
             return
         
-        choices = choice(Constants.CRIME_REPLIES) # Getting a random crime reply
-        fine_amt = randint(400, 700) 
+        choices = choice(Constants.CRIME_REPLIES) # Getting a random crime reply 
         earn_amt = randint(250, 400)
-
-        probability = randint(1, 3) # Setting a 1/3 prob
-
-        if probability == 3: # Setting 3 as the caught prob
-            if fine_amt >= user_data[2]: # Making sure not to put user in dept by setting wallet to 0 if fine > wallet
-                new_wallet_balance = 0
-                description=f'{choices} But you got caught and Paied all you have as fine your {Constants.WALLET} 0 {Constants.COIN}'
-                color=discord.Colour.dark_red()
-            else:
-                new_wallet_balance = user_data[2] - fine_amt
-                description=f'{choices} But you got caught and Paid {fine_amt} {Constants.COIN}'
-                color=discord.Color.dark_red()
-        else:
-            new_wallet_balance = user_data[2] + earn_amt
-            description=f'{choices} You have earned {earn_amt} {Constants.COIN}'
-            color=discord.Color.yellow()
+        new_wallet_balance = user_data[2] + earn_amt
+        description=f'{choices} You have earned {earn_amt} {Constants.COIN}'
+        color=discord.Color.yellow()
 
         self.update_user_wallet(user_id, new_wallet_balance) # Updating user wallet
         crime_embed = EmbedService.create_embed(interaction, description=description, color=color)
@@ -170,7 +170,7 @@ class Games(commands.Cog):
             await interaction.response.send_message(embed=cd_embed, ephemeral=True)
 
     @app_commands.command(name='rob', description='Try to steal from a member in guild')
-    @app_commands.checks.cooldown(1, 14400, key=lambda i : i.user.id)
+    @app_commands.checks.cooldown(1, 43200, key=lambda i : i.user.id)
     async def rob(self, interaction: discord.Interaction, member: discord.Member) -> None:
         if str(interaction.guild) and str(interaction.guild_id) != server:
             logger.info(f"{interaction.user.name} Tried to use {interaction.command.name} in {interaction.guild.id}")
@@ -190,31 +190,18 @@ class Games(commands.Cog):
             await EmbedService.send_error_embed(interaction, title="You can't rob Yourself\nNow wait `4` hours to use command again!")
             return
         
-        rob_quantity = randint(200, 1000)
-        rob_success_prob = randint(1, 3) # Setting 1/3 prob
+        rob_quantity = randint(200, 400)
 
-        if rob_success_prob == 3:
-            if rob_quantity >= member_data[2]: # If robbed money >= member money in the wallet give all to the robber and set wallet of robbed to 0
-                new_member_wallet_bal = 0
-                new_user_wallet_bal = user_data[2] + member_data[2]
-                description=f"{interaction.user.mention} has robbed all {Constants.COIN} from {member.mention}'s wallet"
-                color=discord.Colour.dark_gold()
-            else:
-                new_member_wallet_bal = member_data[2] - rob_quantity
-                new_user_wallet_bal = user_data[2] + rob_quantity
-                description=f"{interaction.user.mention} has robbed {rob_quantity} {Constants.COIN} from {member.mention}"
-                color=discord.Colour.dark_gold()
+        if rob_quantity >= member_data[2]: # If robbed money >= member money in the wallet give all to the robber and set wallet of robbed to 0
+            new_member_wallet_bal = 0
+            new_user_wallet_bal = user_data[2] + member_data[2]
+            description=f"{interaction.user.mention} has robbed {member_data[2]} {Constants.COIN} from {member.mention}'s wallet"
+            color=discord.Colour.dark_gold()
         else:
-            if rob_quantity >= user_data[2]: # If robbed money >= user money in the wallet set user wallet to 0 and give member all money
-                new_member_wallet_bal = user_data[2] + member_data[2]
-                new_user_wallet_bal = 0
-                description=f"{interaction.user.mention} tried to rob {member.mention} and failed\n\n{member.mention} took all money in {interaction.user.mention} wallet"
-                color=discord.Color.dark_red()
-            else:    
-                new_member_wallet_bal = member_data[2] + rob_quantity
-                new_user_wallet_bal = user_data[2] - rob_quantity
-                description=f"{interaction.user.mention} tried to rob {member.mention} and failed\n\n{member.mention} got {rob_quantity} {Constants.COIN} added to his wallet"
-                color=discord.Color.dark_red()
+            new_member_wallet_bal = member_data[2] - rob_quantity
+            new_user_wallet_bal = user_data[2] + rob_quantity
+            description=f"{interaction.user.mention} has robbed {rob_quantity} {Constants.COIN} from {member.mention}"
+            color=discord.Colour.dark_gold()
         
         self.update_user_wallet(member_id, new_member_wallet_bal) # updating memebr wallet 
         self.update_user_wallet(user_id, new_user_wallet_bal) # updating user wallet

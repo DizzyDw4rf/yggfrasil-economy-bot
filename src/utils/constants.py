@@ -147,4 +147,5 @@ class Constants():
         "100000 - 100K": ["Get the 100K role and gain 5% of the money in your bank as income", 10000, 0.05],
         "500000 - 500K": ["Get the 500k role and gain 7% of the money in your bank as income", 50000, 0.07],
         "1000000 - 1M": ["Get the 1M role and gain 15% of the money in your bank as income", 100000, 0.15],
+        "Ramadan Kareem": ["Exclusive role and only avavilable in month of Ramadan and it give you 10% of the money in your bank as income for only **20,000 credits**", 20000, 0.1],
     }

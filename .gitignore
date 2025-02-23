@@ -7,3 +7,4 @@ config.py
 economy.db
 tax.json
 jackbot.json
+bot_status.py

@@ -226,15 +226,15 @@ class Economy(commands.Cog):
                 await interaction.response.send_message('Use `/balance` to open account first.', ephemeral=True)
                 return
             
-            rand_amount = randint(500, 1000)
+            daily_amount = 1500
             username, wallet , bank = user_data[1], user_data[2], user_data[3]
-            new_bank_balance = bank + rand_amount
+            new_bank_balance = bank + daily_amount
             self.update_user(user_id, wallet, new_bank_balance)
             daily_embed = EmbedService.create_embed(
                 interaction,
                 title=f'{username} Got a reward.',
                 description=(
-                    f'Your {Constants.BANK} increased with {rand_amount} {Constants.COIN}\n\n'
+                    f'Your {Constants.BANK} increased with {daily_amount} {Constants.COIN}\n\n'
                     f'{Constants.WALLET}: {wallet} {Constants.COIN}\n\n'
                     f'{Constants.BANK}:  {new_bank_balance} {Constants.COIN}\n\n'
                     f'**Total**: {wallet + new_bank_balance}'
@@ -369,8 +369,9 @@ class Economy(commands.Cog):
         send_btn.callback = send_btn_callback
         cancel_send_btn.callback = cancel_btn_callback
 
+    @app_commands.describe(amount="Type a positive amount or 'all'")
     @app_commands.command(name='withdraw', description='Move money from bank to your wallet')
-    async def withdraw(self, interaction: discord.Interaction, amount: app_commands.Range[int, 1]) -> None:
+    async def withdraw(self, interaction: discord.Interaction, amount: str) -> None:
         if str(interaction.guild) and str(interaction.guild_id) != server:
             logger.info(f"{interaction.user.name} Tried to use {interaction.command.name} in {interaction.guild.id}")
             await EmbedService.send_inv_embed(interaction)
@@ -381,21 +382,33 @@ class Economy(commands.Cog):
                 await interaction.response.send_message('You can\'t withdraw from bank without bank account.\nUse `/balance` to create one.', ephemeral=True)
                 return
 
-            taxed_amount = remove_tax(amount=amount, tax_rate=TaxService.get_tax_rate())
+            # Check if the amount is "all" or positive number
+            if amount.lower() == "all":
+                amount_to_withdraw = user_data[3]
+            else:
+                try:
+                    amount_to_withdraw = int(amount)
+                    if amount_to_withdraw <= 0:
+                        raise ValueError
+                except ValueError:
+                    await EmbedService.send_error_embed(interaction, title="Please enter a positive amount or 'all' to withdraw all money")
+                    return
 
-            if amount > user_data[3]:
+            taxed_amount = remove_tax(amount=amount_to_withdraw, tax_rate=TaxService.get_tax_rate())
+
+            if amount_to_withdraw > user_data[3]:
                 err_embed = EmbedService.create_embed(
                     interaction,
                     title='Invalid credit Withdraw',
                     description=(
-                        f'Your {Constants.BANK}: {user_data[3]} {Constants.COIN}\nYou can\'t withdraw {amount} {Constants.COIN}'
+                        f'Your {Constants.BANK}: {user_data[3]} {Constants.COIN}\nYou can\'t withdraw {amount_to_withdraw} {Constants.COIN}'
                     ),
                     color=discord.Color.dark_red()
                 )
                 await interaction.response.send_message(embed=err_embed)
             else:
                 new_wallet_balance = user_data[2] + taxed_amount
-                new_bank_balance = user_data[3] - amount
+                new_bank_balance = user_data[3] - amount_to_withdraw
                 self.update_user(user_id, new_wallet_balance, new_bank_balance)
                 wd_embed = EmbedService.create_embed(
                     interaction,
@@ -409,8 +422,9 @@ class Economy(commands.Cog):
                 )
                 await interaction.response.send_message(embed=wd_embed)
 
+    @app_commands.describe(amount="Type a positive amount or 'all'")
     @app_commands.command(name='deposit', description='Move money form wallet to your bank')
-    async def deposit(self, interaction: discord.Interaction, amount: app_commands.Range[int, 1]) -> None:
+    async def deposit(self, interaction: discord.Interaction, amount: str) -> None:
         if str(interaction.guild) and str(interaction.guild_id) != server:
             logger.info(f"{interaction.user.name} Tried to use {interaction.command.name} in {interaction.guild.id}")
             await EmbedService.send_inv_embed(interaction)
@@ -421,20 +435,32 @@ class Economy(commands.Cog):
                 await interaction.response.send_message('You can\'t deposit to bank without bank account.\nUse `/balance` to create one.', ephemeral=True)
                 return
             
-            taxed_amount = remove_tax(amount=amount, tax_rate=TaxService.get_tax_rate())
+            # Check if the amount is "all" or positive number
+            if amount.lower() == "all":
+                amount_to_withdraw = user_data[2]
+            else:
+                try:
+                    amount_to_withdraw = int(amount)
+                    if amount_to_withdraw <= 0:
+                        raise ValueError
+                except ValueError:
+                    await EmbedService.send_error_embed(interaction, title="Please enter a positive amount or 'all' to withdraw all money")
+                    return
+            
+            taxed_amount = remove_tax(amount=amount_to_withdraw, tax_rate=TaxService.get_tax_rate())
 
-            if amount > user_data[2]:
+            if amount_to_withdraw > user_data[2]:
                 err_embed = EmbedService.create_embed(
                     interaction,
                     title='Invalid credit Deposit',
                     description=(
-                        f'Your {Constants.WALLET}: {user_data[2]} {Constants.COIN}\nYou can\'t deposit {amount} {Constants.COIN}'
+                        f'Your {Constants.WALLET}: {user_data[2]} {Constants.COIN}\nYou can\'t deposit {amount_to_withdraw} {Constants.COIN}'
                     ),
                     color=discord.Color.dark_red()
                 )
                 await interaction.response.send_message(embed=err_embed)
             else:
-                new_wallet_balance = user_data[2] - amount
+                new_wallet_balance = user_data[2] - amount_to_withdraw
                 new_bank_balance = user_data[3] + taxed_amount
                 self.update_user(user_id, new_wallet_balance, new_bank_balance)
                 wd_embed = EmbedService.create_embed(

@@ -26,13 +26,13 @@ class BotStatus:
     @staticmethod
     def __debug_phase():
         """ Set the server to debug """
-        server = os.getenv('DEBUG_GUILD_ID')
+        server = os.getenv('GUILD_ID')
         return server
     
     @staticmethod
     def __production_phase():
         """ Set the server to production """
-        server = os.getenv('PRODUCTION_GUILD_ID')
+        server = os.getenv('GUILD_ID')
         return server
 
     @staticmethod
